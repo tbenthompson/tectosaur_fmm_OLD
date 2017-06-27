@@ -1,0 +1,3 @@
+get the gpu fmm working completely
+think about using a uniform octree for its speed advantages.
+determine whether the re-use or FFT of m2l kernels would make any sense, take advantage of homogeneity?
