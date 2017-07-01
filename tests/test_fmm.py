@@ -94,29 +94,6 @@ def test_double_layer():
     correct = correct_mat.dot(np.ones(src_pts.shape[0]))
     check(est, correct, 3)
 
-def test_self_fmm():
-    order = 60
-    mac = 3.0
-    n = 15000
-    k_name = "elasticU"
-    params = [1.0, 0.25]
-    pts = np.random.rand(n, 3)
-    ns = np.random.rand(n, 3)
-    ns /= np.linalg.norm(ns, axis = 1)[:,np.newaxis]
-    kd = fmm.KDTree(pts, ns, order)
-    fmm_mat = fmm.fmmmmmmm(
-        kd, kd, fmm.FMMConfig(1.1, mac, order, k_name, params)
-    )
-    est = fmm.eval(fmm_mat, np.ones(n * 3))
-    correct_mat = fmm.direct_eval(
-        k_name, np.array(kd.pts), np.array(kd.normals),
-        np.array(kd.pts), np.array(kd.normals), params
-    ).reshape((n * 3, n * 3))
-    correct_mat[np.isnan(correct_mat)] = 0
-    correct_mat[np.isinf(correct_mat)] = 0
-    correct = correct_mat.dot(np.ones(n * 3))
-    check(est, correct, 2)
-
 if __name__ == '__main__':
     run_full(50000, rand_pts, 10000000000000, 30, "invr", [])
     # test_build_big()

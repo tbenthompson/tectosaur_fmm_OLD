@@ -56,5 +56,5 @@ def eval(fmm_mat, input_vals):
 #         inplace_add_vecs(multipoles, add_to_multipoles);
 #     }
 #
-    out += fmm_mat.eval(input_vals)
+    out = fmm_mat.eval(input_vals)
     return out

@@ -436,7 +436,7 @@ std::vector<double> FMMMat::eval(double* in) {
     auto n_locals = surf.size() * obs_tree.nodes.size() * tensor_dim();
 
     std::vector<double> out(n_outputs, 0.0);
-    // p2p_matvec(out.data(), in);
+    p2p_matvec(out.data(), in);
 
     std::vector<double> m_check(n_multipoles, 0.0);
     p2m_matvec(m_check.data(), in);
