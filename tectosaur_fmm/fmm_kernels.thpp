@@ -1,8 +1,6 @@
 #include "kdtree.hpp"
 #include <functional>
 
-namespace tectosaur {
-
 struct NBodyProblem {
     const Vec3* obs_pts;
     const Vec3* obs_ns;
@@ -20,5 +18,3 @@ struct Kernel {
 };
 
 Kernel get_by_name(std::string name);
-
-} //end namespace tectosaur

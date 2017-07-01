@@ -6,7 +6,7 @@
 #include "fmm_kernels.hpp"
 #include "kdtree.hpp"
 
-namespace tectosaur {
+std::vector<Vec3> inscribe_surf(const Sphere& b, double scaling, const std::vector<Vec3>& fmm_surf);
 
 struct FMMConfig {
     // The MAC needs to < (1.0 / (check_r - 1)) so that farfield
@@ -99,5 +99,3 @@ struct FMMMat {
 };
 
 FMMMat fmmmmmmm(const KDTree& obs_tree, const KDTree& src_tree, const FMMConfig& cfg);
-
-}  // end namespace tectosaur

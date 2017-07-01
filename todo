@@ -1,3 +1,6 @@
+fix up the fmm tests
+read about the implementation of the high-performance volumetric integration tools.
+why didn't the fft stuff work in the past?
 get the gpu fmm working completely
 think about using a uniform octree for its speed advantages.
 determine whether the re-use or FFT of m2l kernels would make any sense, take advantage of homogeneity?

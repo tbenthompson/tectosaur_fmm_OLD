@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <iostream>
 
-namespace tectosaur {
-
 std::ostream& operator<<(std::ostream& os, const Vec3& v) {
     os << "(" << v[0] << ", " << v[1] << ", " << v[2] << ")";
     return os;
@@ -88,5 +86,3 @@ size_t KDTree::add_node(size_t start, size_t end, int split_dim,
         return n_idx;
     }
 }
-
-} //end namespace tectosaur

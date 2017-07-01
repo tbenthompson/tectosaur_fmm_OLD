@@ -1,13 +1,10 @@
-#include "fmm_impl.hpp"
 #include <cassert>
 #include <cmath>
 #include <iostream>
 #include <limits>
-#include "lib/doctest.h"
-#include "blas_wrapper.hpp"
-#include "lib/test_helpers.hpp"
 
-namespace tectosaur {
+#include "fmm_impl.hpp"
+#include "blas_wrapper.hpp"
 
 std::vector<Vec3> inscribe_surf(const Sphere& b, double scaling,
                                 const std::vector<Vec3>& fmm_surf) {
@@ -45,15 +42,6 @@ std::vector<Vec3> surrounding_surface_sphere(size_t order)
     return pts;
 }
 
-TEST_CASE("inscribe") {
-    auto s =
-        inscribe_surf({{1, 1, 1}, 2}, 0.5, {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}});
-    REQUIRE(s.size() == size_t(3));
-    REQUIRE_ARRAY_EQUAL(s[0], Vec3{2, 1, 1}, 3);
-    REQUIRE_ARRAY_EQUAL(s[1], Vec3{1, 2, 1}, 3);
-    REQUIRE_ARRAY_EQUAL(s[2], Vec3{1, 1, 2}, 3);
-}
-
 extern "C" void dgemv_(char* TRANS, int* M, int* N, double* ALPHA, double* A,
                        int* LDA, double* X, int* INCX, double* BETA, double* Y,
                        int* INCY);
@@ -71,15 +59,6 @@ std::vector<double> BlockSparseMat::matvec(double* vec, size_t out_size) {
         );
     }
     return out;
-}
-
-TEST_CASE("matvec") {
-    BlockSparseMat m{{{1, 1, 2, 2, 0}}, {0, 2, 1, 3}};
-    std::vector<double> in = {0, -1, 1};
-    auto out = m.matvec(in.data(), 3);
-    REQUIRE(out[0] == 0.0);
-    REQUIRE(out[1] == 2.0);
-    REQUIRE(out[2] == 2.0);
 }
 
 void NewMatrixFreeOp::insert(const KDNode& obs_n, const KDNode& src_n) {
@@ -514,6 +493,4 @@ FMMMat fmmmmmmm(const KDTree& obs_tree, const KDTree& src_tree,
     }
 
     return mat;
-}
-
 }

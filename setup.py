@@ -1,11 +1,11 @@
 import setuptools
 
 setuptools.setup(
-    packages = ['effemmemm'],
-    install_requires = [],
+    packages = ['tectosaur_fmm'],
+    install_requires = ['numpy', 'cppimport', 'pytest'],
     zip_safe = False,
 
-    name = 'effemmemm',
+    name = 'tectosaur_fmm',
     version = '0.0.1',
     description = 'Phonetically speaking.',
     author = 'T. Ben Thompson',

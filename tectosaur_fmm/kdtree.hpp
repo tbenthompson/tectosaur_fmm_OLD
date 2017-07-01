@@ -4,8 +4,6 @@
 #include <vector>
 #include <cmath>
 
-namespace tectosaur {
-
 using Vec3 = std::array<double, 3>;
 
 std::ostream& operator<<(std::ostream& os, const Vec3&);
@@ -59,5 +57,3 @@ struct KDTree {
                     double parent_size, int depth, std::vector<PtNormal>& temp_pts);
     KDTree(Vec3* pts, Vec3* normals, size_t n_pts, size_t n_per_cell);
 };
-
-}  // end namespace tectosaur

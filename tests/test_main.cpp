@@ -1,15 +1,6 @@
 <%
-setup_pybind11(cfg)
-cfg['compiler_args'].extend(['-std=c++14', '-O3', '-g', '-Wall', '-Werror', '-fopenmp'])
-cfg['include_dirs'] = cfg.get('include_dirs',[]) + ['../effemmemm']
-cfg['sources'] = cfg.get('sources',[]) + ['test_blas.cpp']
-cfg['sources'] += ['../effemmemm/blas_wrapper.cpp']
-cfg['dependencies'] = ['../effemmemm/blas_wrapper.hpp']
-
-import numpy as np
-blas = np.__config__.blas_opt_info
-cfg['library_dirs'] = blas['library_dirs']
-cfg['libraries'] = blas['libraries']
+from tectosaur_fmm.compile_cfg import test_cfg
+test_cfg(cfg)
 %>
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN

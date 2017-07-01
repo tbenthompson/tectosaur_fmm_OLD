@@ -5,8 +5,6 @@
 
 #define Real double
 
-namespace tectosaur {
-
 template <typename F>
 void direct_nbody(const NBodyProblem& p, double* out, const F& f) {
     for (size_t i = 0; i < p.n_obs; i++) {
@@ -591,5 +589,3 @@ Kernel get_by_name(std::string name) {
         throw std::runtime_error("invalid kernel name");
     }
 }
-
-}  // end namespace tectosaur
