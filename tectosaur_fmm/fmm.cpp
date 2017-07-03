@@ -86,7 +86,6 @@ PYBIND11_PLUGIN(fmm) {
         .def_readonly("cfg", &FMMMat::cfg)
         .def_readonly("translation_surface_order", &FMMMat::translation_surface_order)
         .def_readonly("uc2e", &FMMMat::uc2e)
-        .def_readonly("dc2e", &FMMMat::dc2e)
         .def_property_readonly("tensor_dim", &FMMMat::tensor_dim)
         .def("p2p_eval", [] (FMMMat& m, NPArrayD v) {
             auto* ptr = reinterpret_cast<double*>(v.request().ptr);

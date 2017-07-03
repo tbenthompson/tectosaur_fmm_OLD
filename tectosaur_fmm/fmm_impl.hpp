@@ -74,12 +74,8 @@ struct FMMMat {
 
     void p2m_matvec(double* out, double* in);
     void m2m_matvec(double* out, double* in, int level);
-    void p2l_matvec(double* out, double* in);
-    void m2l_matvec(double* out, double* in);
-    void l2l_matvec(double* out, double* in, int level);
     void p2p_matvec(double* out, double* in);
     void m2p_matvec(double* out, double* in);
-    void l2p_matvec(double* out, double* in);
 
     std::vector<double> p2p_eval(double* in);
     std::vector<double> eval(double* in);
@@ -87,15 +83,10 @@ struct FMMMat {
     NewMatrixFreeOp p2p_new;
     MatrixFreeOp p2p;
     MatrixFreeOp p2m;
-    MatrixFreeOp p2l;
     MatrixFreeOp m2p;
     std::vector<MatrixFreeOp> m2m;
-    MatrixFreeOp m2l;
-    MatrixFreeOp l2p;
-    std::vector<MatrixFreeOp> l2l;
 
     std::vector<BlockSparseMat> uc2e;
-    std::vector<BlockSparseMat> dc2e;
 };
 
 FMMMat fmmmmmmm(const KDTree& obs_tree, const KDTree& src_tree, const FMMConfig& cfg);

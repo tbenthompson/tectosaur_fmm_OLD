@@ -3,6 +3,8 @@ import numpy as np
 import tectosaur.util.gpu as gpu
 from tectosaur.util.timer import Timer
 
+import tectosaur_fmm
+
 import cppimport
 fmm = cppimport.imp("tectosaur_fmm.fmm").fmm
 for k in dir(fmm):
@@ -10,7 +12,9 @@ for k in dir(fmm):
 
 float_type = np.float32
 def gpu_p2p_eval(fmm_mat, input_vals):
-    f = gpu.load_gpu('fmm/p2p_kernel.cl', tmpl_args = dict()).p2p_kernel
+    f = gpu.load_gpu(
+        'p2p_kernel.cl', tmpl_dir = tectosaur_fmm.source_dir, tmpl_args = dict()
+    ).p2p_kernel
 
     t = Timer()
     #TODO: Benchmark and check if its worth exposing the
@@ -44,7 +48,7 @@ def gpu_p2p_eval(fmm_mat, input_vals):
 
 def eval(fmm_mat, input_vals):
     # out = fmm_mat.p2p_eval(input_vals)
-    # out = gpu_p2p_eval(fmm_mat, input_vals)
+    out = gpu_p2p_eval(fmm_mat, input_vals)
 #
 #     m_check = gpu_p2m_eval(input_vals)
 #     uc2e[0].matvec(m_check)
@@ -56,5 +60,5 @@ def eval(fmm_mat, input_vals):
 #         inplace_add_vecs(multipoles, add_to_multipoles);
 #     }
 #
-    out = fmm_mat.eval(input_vals)
+    out += fmm_mat.eval(input_vals)
     return out

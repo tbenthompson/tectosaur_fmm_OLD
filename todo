@@ -3,7 +3,6 @@
 use FMM for okada
 -- just try it out first, make sure its accurate.
 
-see if there is a new version of doctest
 setup github repo for tectosaur_fmm.
 fix up the fmm tests
 read about the implementation of the high-performance volumetric integration tools.
