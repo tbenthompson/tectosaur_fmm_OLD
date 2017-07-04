@@ -1,12 +1,15 @@
+test fmm with elastic kernels more
+rename UTAH to elasticUTAH, standardize the inputs for the vector/tensor kernels, refactor that shit!
+2D fmm
+uniform octree to speed up fmm setup and standardize some of the translation kernels.
 
--- FMM P2P and standard direct algorithm disagree in value. YIKES!
 use FMM for okada
 -- just try it out first, make sure its accurate.
 
-setup github repo for tectosaur_fmm.
-fix up the fmm tests
 read about the implementation of the high-performance volumetric integration tools.
-why didn't the fft stuff work in the past?
-get the gpu fmm working completely
-think about using a uniform octree for its speed advantages.
-determine whether the re-use or FFT of m2l kernels would make any sense, take advantage of homogeneity?
+
+why didn't the fft stuff work for the m2l in the past?
+https://stackoverflow.com/questions/18384054/what-are-the-downsides-of-convolution-by-fft-compared-to-realspace-convolution
+
+reading exafmm stuff is interesting: https://github.com/exafmm/exafmm-alpha/blob/master/gpu/traversal.h
+

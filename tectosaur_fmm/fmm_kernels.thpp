@@ -15,6 +15,7 @@ struct Kernel {
     std::function<void(const NBodyProblem&,double*)> f;
     std::function<void(const NBodyProblem&,double*,double*)> f_mf;
     int tensor_dim;
+    std::string name;
 };
 
 Kernel get_by_name(std::string name);

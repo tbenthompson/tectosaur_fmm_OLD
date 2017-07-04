@@ -7,6 +7,7 @@
 
 template <typename F>
 void direct_nbody(const NBodyProblem& p, double* out, const F& f) {
+#pragma omp parallel for
     for (size_t i = 0; i < p.n_obs; i++) {
         for (size_t j = 0; j < p.n_src; j++) {
             out[i * p.n_src + j] = f(p.obs_pts[i], p.obs_ns[i], p.src_pts[j], p.src_ns[j]);
@@ -16,6 +17,7 @@ void direct_nbody(const NBodyProblem& p, double* out, const F& f) {
 
 template <typename F>
 void mf_direct_nbody(const NBodyProblem& p, double* out, double* in, const F& f) {
+#pragma omp parallel for
     for (size_t i = 0; i < p.n_obs; i++) {
         for (size_t j = 0; j < p.n_src; j++) {
             out[i] += f(p.obs_pts[i], p.obs_ns[i], p.src_pts[j], p.src_ns[j]) * in[j];
@@ -23,38 +25,32 @@ void mf_direct_nbody(const NBodyProblem& p, double* out, double* in, const F& f)
     }
 }
 
+double one_K(const Vec3&, const Vec3&, const Vec3&, const Vec3&) {
+    return 1.0; 
+}
+
 void one(const NBodyProblem& p, double* out) {
-    direct_nbody(p, out, [](const Vec3&, const Vec3&, const Vec3&, const Vec3&) {
-        return 1.0; 
-    });
+    direct_nbody(p, out, one_K);
 }
 
 void mf_one(const NBodyProblem& p, double* out, double* in) {
-    mf_direct_nbody(p, out, in, [](const Vec3&, const Vec3&, const Vec3&, const Vec3&) {
-        return 1.0; 
-    });
+    mf_direct_nbody(p, out, in, one_K);
+}
+
+double invr_K(const Vec3& obs, const Vec3& nobs, const Vec3& src, const Vec3& nsrc) {
+    auto r = hypot(sub(obs, src));
+    if (r == 0.0) {
+        return 0.0;
+    }
+    return 1.0 / r;
 }
 
 void invr(const NBodyProblem& p, double* out) {
-    direct_nbody(p, out,
-        [](const Vec3& obs, const Vec3& nobs, const Vec3& src, const Vec3& nsrc) {
-            auto r = hypot(sub(obs, src));
-            if (r == 0.0) {
-                return 0.0;
-            }
-            return 1.0 / r;
-        });
+    direct_nbody(p, out, invr_K);
 }
 
 void mf_invr(const NBodyProblem& p, double* out, double* in) {
-    mf_direct_nbody(p, out, in,
-        [](const Vec3& obs, const Vec3& nobs, const Vec3& src, const Vec3& nsrc) {
-            auto r = hypot(sub(obs, src));
-            if (r == 0.0) {
-                return 0.0;
-            }
-            return 1.0 / r;
-        });
+    mf_direct_nbody(p, out, in, invr_K);
 }
 
 void tensor_invr(const NBodyProblem& p, double* out) {
@@ -87,24 +83,18 @@ void mf_tensor_invr(const NBodyProblem& p, double* out, double* in) {
     }
 }
 
+double laplace_double_K(const Vec3& obs, const Vec3& nobs, const Vec3& src, const Vec3& nsrc) {
+    auto delta = sub(src, obs);
+    auto r = hypot(delta);
+    return dot(delta, nsrc) / (4 * M_PI * r * r * r);
+}
+
 void laplace_double(const NBodyProblem& p, double* out) {
-    direct_nbody(p, out,
-        [](const Vec3& obs, const Vec3& nobs, const Vec3& src, const Vec3& nsrc) {
-            auto delta = sub(obs, src);
-            auto r = hypot(delta);
-            return dot(delta, nsrc) / (4 * M_PI * r * r * r);
-        }
-    );
+    direct_nbody(p, out, laplace_double_K);
 }
 
 void mf_laplace_double(const NBodyProblem& p, double* out, double* in) {
-    mf_direct_nbody(p, out, in,
-        [](const Vec3& obs, const Vec3& nobs, const Vec3& src, const Vec3& nsrc) {
-            auto delta = sub(obs, src);
-            auto r = hypot(delta);
-            return dot(delta, nsrc) / (4 * M_PI * r * r * r);
-        }
-    );
+    mf_direct_nbody(p, out, in, laplace_double_K);
 }
 
 
@@ -570,21 +560,21 @@ void mf_elasticH(const NBodyProblem& p, double* out, double* in) {
 
 Kernel get_by_name(std::string name) {
     if (name == "one") {
-        return {one, mf_one, 1};
+        return {one, mf_one, 1, name};
     } else if (name == "invr") {
-        return {invr, mf_invr, 1};
+        return {invr, mf_invr, 1, name};
     } else if (name == "tensor_invr") {
-        return {tensor_invr, mf_tensor_invr, 3};
+        return {tensor_invr, mf_tensor_invr, 3, name};
     } else if (name == "laplace_double") {
-        return {laplace_double, mf_laplace_double, 1};   
+        return {laplace_double, mf_laplace_double, 1, name};   
     } else if (name == "elasticU") {
-        return {elasticU, mf_elasticU, 3};
+        return {elasticU, mf_elasticU, 3, name};
     } else if (name == "elasticT") {
-        return {elasticT, mf_elasticT, 3};
+        return {elasticT, mf_elasticT, 3, name};
     } else if (name == "elasticA") {
-        return {elasticA, mf_elasticA, 3};
+        return {elasticA, mf_elasticA, 3, name};
     } else if (name == "elasticH") {
-        return {elasticH, mf_elasticH, 3};
+        return {elasticH, mf_elasticH, 3, name};
     } else {
         throw std::runtime_error("invalid kernel name");
     }

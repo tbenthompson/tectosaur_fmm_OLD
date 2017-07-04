@@ -19,6 +19,7 @@ struct FMMConfig {
     Kernel kernel;
     std::vector<double> params;
 
+    std::string kernel_name() const { return kernel.name; }
     int tensor_dim() const { return kernel.tensor_dim; }
 };
 
@@ -38,16 +39,7 @@ struct BlockSparseMat {
     size_t get_nnz() { return vals.size(); }
 };
 
-struct MatrixFreeBlock {
-    size_t obs_n_idx;
-    size_t src_n_idx;
-};
-
 struct MatrixFreeOp {
-    std::vector<MatrixFreeBlock> blocks;
-};
-
-struct NewMatrixFreeOp {
     std::vector<int> obs_n_start;
     std::vector<int> obs_n_end;
     std::vector<int> obs_n_idx;
@@ -78,9 +70,9 @@ struct FMMMat {
     void m2p_matvec(double* out, double* in);
 
     std::vector<double> p2p_eval(double* in);
-    std::vector<double> eval(double* in);
+    std::vector<double> p2m_eval(double* in);
+    std::vector<double> m2p_eval(double* multipoles);
 
-    NewMatrixFreeOp p2p_new;
     MatrixFreeOp p2p;
     MatrixFreeOp p2m;
     MatrixFreeOp m2p;

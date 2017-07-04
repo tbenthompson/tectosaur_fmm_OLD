@@ -3,6 +3,7 @@
 #include <iostream>
 #include <limits>
 
+#include "include/timing.hpp"
 #include "fmm_impl.hpp"
 #include "blas_wrapper.hpp"
 
@@ -61,7 +62,7 @@ std::vector<double> BlockSparseMat::matvec(double* vec, size_t out_size) {
     return out;
 }
 
-void NewMatrixFreeOp::insert(const KDNode& obs_n, const KDNode& src_n) {
+void MatrixFreeOp::insert(const KDNode& obs_n, const KDNode& src_n) {
     obs_n_start.push_back(obs_n.start);
     obs_n_end.push_back(obs_n.end);
     obs_n_idx.push_back(obs_n.idx);
@@ -71,22 +72,19 @@ void NewMatrixFreeOp::insert(const KDNode& obs_n, const KDNode& src_n) {
 }
 
 void p2p(FMMMat& mat, const KDNode& obs_n, const KDNode& src_n) {
-    mat.p2p_new.insert(obs_n, src_n);
-    mat.p2p.blocks.push_back(MatrixFreeBlock{obs_n.idx, src_n.idx});
+    mat.p2p.insert(obs_n, src_n);
 }
 
 void m2p(FMMMat& mat, const KDNode& obs_n, const KDNode& src_n) {
-    mat.m2p.blocks.push_back(MatrixFreeBlock{obs_n.idx, src_n.idx});
+    mat.m2p.insert(obs_n, src_n);
 }
 
 void p2m(FMMMat& mat, const KDNode& src_n) {
-    mat.p2m.blocks.push_back(MatrixFreeBlock{src_n.idx, src_n.idx});
+    mat.p2m.insert(src_n, src_n);
 }
 
 void m2m(FMMMat& mat, const KDNode& parent_n, const KDNode& child_n) {
-    mat.m2m[parent_n.height].blocks.push_back(
-        MatrixFreeBlock{parent_n.idx, child_n.idx}
-    );
+    mat.m2m[parent_n.height].insert(parent_n, child_n);
 }
 
 void traverse(FMMMat& mat, const KDNode& obs_n, const KDNode& src_n) {
@@ -196,6 +194,8 @@ void c2e(FMMMat& mat, BlockSparseMat& sub_mat, const KDNode& node,
     // 2) Figure out a way to do less of them. Prune tree nodes?
     //   May get about 25-50% faster.
     // 3) A faster alternative? QR? <--- This seems like the first step.
+    // 4) BEST OPTIONBEST OPTIONBEST OPTIONBEST OPTIONBEST OPTION: Regular octree
+    // so that the number of stored c2e operators can be small.
     // auto svd = svd_decompose(equiv_to_check.data(), n_rows);
     // const double truncation_threshold = 1e-15;
     // set_threshold(svd, truncation_threshold);
@@ -250,9 +250,9 @@ std::vector<Vec3> FMMMat::get_surf(const KDNode& src_n, double r) {
 }
 
 void FMMMat::p2p_matvec(double* out, double* in) {
-    for (auto& b: p2p.blocks) {
-        auto obs_n = obs_tree.nodes[b.obs_n_idx];
-        auto src_n = src_tree.nodes[b.src_n_idx];
+    for (size_t i = 0; i < p2p.obs_n_idx.size(); i++) {
+        auto obs_n = obs_tree.nodes[p2p.obs_n_idx[i]];
+        auto src_n = src_tree.nodes[p2p.src_n_idx[i]];
         interact_pts(
             cfg, out, in,
             &obs_tree.pts[obs_n.start], &obs_tree.normals[obs_n.start],
@@ -264,8 +264,8 @@ void FMMMat::p2p_matvec(double* out, double* in) {
 }
 
 void FMMMat::p2m_matvec(double* out, double *in) {
-    for (auto& b: p2m.blocks) {
-        auto src_n = src_tree.nodes[b.src_n_idx];
+    for (size_t i = 0; i < p2m.obs_n_idx.size(); i++) {
+        auto src_n = src_tree.nodes[p2m.src_n_idx[i]];
         auto check = get_surf(src_n, cfg.outer_r);
         interact_pts(
             cfg, out, in,
@@ -278,9 +278,9 @@ void FMMMat::p2m_matvec(double* out, double *in) {
 }
 
 void FMMMat::m2m_matvec(double* out, double *in, int level) {
-    for (auto& b: m2m[level].blocks) {
-        auto parent_n = src_tree.nodes[b.obs_n_idx];
-        auto child_n = src_tree.nodes[b.src_n_idx];
+    for (size_t i = 0; i < m2m[level].obs_n_idx.size(); i++) {
+        auto parent_n = src_tree.nodes[m2m[level].obs_n_idx[i]];
+        auto child_n = src_tree.nodes[m2m[level].src_n_idx[i]];
         auto check = get_surf(parent_n, cfg.outer_r);
         auto equiv = get_surf(child_n, cfg.inner_r);
         interact_pts(
@@ -294,9 +294,9 @@ void FMMMat::m2m_matvec(double* out, double *in, int level) {
 }
 
 void FMMMat::m2p_matvec(double* out, double* in) {
-    for (auto& b: m2p.blocks) {
-        auto obs_n = obs_tree.nodes[b.obs_n_idx];
-        auto src_n = src_tree.nodes[b.src_n_idx];
+    for (size_t i = 0; i < m2p.obs_n_idx.size(); i++) {
+        auto obs_n = obs_tree.nodes[m2p.obs_n_idx[i]];
+        auto src_n = src_tree.nodes[m2p.src_n_idx[i]];
 
         auto equiv = get_surf(src_n, cfg.inner_r);
         interact_pts(
@@ -328,14 +328,8 @@ std::vector<double> FMMMat::p2p_eval(double* in) {
     return out;
 }
 
-std::vector<double> FMMMat::eval(double* in) {
-    auto n_outputs = obs_tree.pts.size() * tensor_dim();
+std::vector<double> FMMMat::p2m_eval(double* in) {
     auto n_multipoles = surf.size() * src_tree.nodes.size() * tensor_dim();
-    // auto n_locals = surf.size() * obs_tree.nodes.size() * tensor_dim();
-
-    std::vector<double> out(n_outputs, 0.0);
-    // p2p_matvec(out.data(), in);
-
     std::vector<double> m_check(n_multipoles, 0.0);
     p2m_matvec(m_check.data(), in);
 
@@ -347,21 +341,13 @@ std::vector<double> FMMMat::eval(double* in) {
         auto add_to_multipoles = uc2e[i].matvec(m_check.data(), n_multipoles);
         inplace_add_vecs(multipoles, add_to_multipoles);
     }
+    return multipoles;
+}
 
-    // std::vector<double> l_check(n_locals, 0.0);
-    // p2l_matvec(l_check.data(), in);
-    // m2l_matvec(l_check.data(), multipoles.data());
-
-    // std::vector<double> locals(n_locals, 0.0);
-    // for (size_t i = 0; i < l2l.size(); i++) {
-    //     l2l_matvec(l_check.data(), locals.data(), i);
-    //     auto add_to_locals = dc2e[i].matvec(l_check.data(), n_locals);
-    //     inplace_add_vecs(locals, add_to_locals);
-    // }
-
-    m2p_matvec(out.data(), multipoles.data());
-    // l2p_matvec(out.data(), locals.data());
-
+std::vector<double> FMMMat::m2p_eval(double* multipoles) {
+    auto n_outputs = obs_tree.pts.size() * tensor_dim();
+    std::vector<double> out(n_outputs, 0.0);
+    m2p_matvec(out.data(), multipoles);
     return out;
 }
 
@@ -380,8 +366,6 @@ FMMMat fmmmmmmm(const KDTree& obs_tree, const KDTree& src_tree,
     {
 #pragma omp task
         up_collect(mat, mat.src_tree.root());
-#pragma omp task
-        // down_collect(mat, mat.obs_tree.root());
 #pragma omp task
         traverse(mat, mat.obs_tree.root(), mat.src_tree.root());
     }

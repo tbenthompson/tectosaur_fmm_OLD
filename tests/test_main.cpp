@@ -1,5 +1,5 @@
 <%
-from tectosaur_fmm.compile_cfg import test_cfg
+from tectosaur_fmm.cfg import test_cfg
 test_cfg(cfg)
 %>
 

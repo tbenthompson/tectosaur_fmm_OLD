@@ -1,5 +1,5 @@
 <% 
-from tectosaur_fmm.compile_cfg import lib_cfg
+from tectosaur_fmm.cfg import lib_cfg
 lib_cfg(cfg)
 %>
 
@@ -10,6 +10,7 @@ lib_cfg(cfg)
 #include "include/pybind11_nparray.hpp"
 
 #include "fmm_impl.hpp"
+#include "octree.hpp"
 #include "kdtree.hpp"
 
 namespace py = pybind11;
@@ -51,6 +52,18 @@ PYBIND11_PLUGIN(fmm) {
         .def_readonly("orig_idxs", &KDTree::orig_idxs)
         .def_readonly("max_height", &KDTree::max_height);
 
+    py::class_<Octree>(m, "Octree");
+        // .def("__init__",
+        // [] (Octree& kd, NPArrayD np_pts, NPArrayD np_normals, size_t n_per_cell) {
+        //     check_shape<3>(np_pts);
+        //     check_shape<3>(np_normals);
+        //     new (&kd) KDTree(
+        //         reinterpret_cast<Vec3*>(np_pts.request().ptr),
+        //         reinterpret_cast<Vec3*>(np_normals.request().ptr),
+        //         np_pts.request().shape[0], n_per_cell
+        //     );
+        // });
+
     py::class_<BlockSparseMat>(m, "BlockSparseMat")
         .def("get_nnz", &BlockSparseMat::get_nnz)
         .def("matvec", [] (BlockSparseMat& s, NPArrayD v, size_t n_rows) {
@@ -69,20 +82,28 @@ PYBIND11_PLUGIN(fmm) {
                     get_vector<double>(params)                                    
                 };
             }
-        );
+        )
+        .def_readonly("inner_r", &FMMConfig::inner_r)
+        .def_readonly("outer_r", &FMMConfig::outer_r)
+        .def_readonly("order", &FMMConfig::order)
+        .def_readonly("params", &FMMConfig::params)
+        .def("kernel_name", &FMMConfig::kernel_name)
+        .def("tensor_dim", &FMMConfig::tensor_dim);
 
-    py::class_<NewMatrixFreeOp>(m, "NewMatrixFreeOp")
-        .def_readonly("obs_n_start", &NewMatrixFreeOp::obs_n_start)
-        .def_readonly("obs_n_end", &NewMatrixFreeOp::obs_n_end)
-        .def_readonly("obs_n_idx", &NewMatrixFreeOp::obs_n_idx)
-        .def_readonly("src_n_start", &NewMatrixFreeOp::src_n_start)
-        .def_readonly("src_n_end", &NewMatrixFreeOp::src_n_end)
-        .def_readonly("src_n_idx", &NewMatrixFreeOp::src_n_idx);
+    py::class_<MatrixFreeOp>(m, "MatrixFreeOp")
+        .def_readonly("obs_n_start", &MatrixFreeOp::obs_n_start)
+        .def_readonly("obs_n_end", &MatrixFreeOp::obs_n_end)
+        .def_readonly("obs_n_idx", &MatrixFreeOp::obs_n_idx)
+        .def_readonly("src_n_start", &MatrixFreeOp::src_n_start)
+        .def_readonly("src_n_end", &MatrixFreeOp::src_n_end)
+        .def_readonly("src_n_idx", &MatrixFreeOp::src_n_idx);
 
     py::class_<FMMMat>(m, "FMMMat")
         .def_readonly("obs_tree", &FMMMat::obs_tree)
         .def_readonly("src_tree", &FMMMat::src_tree)
-        .def_readonly("p2p", &FMMMat::p2p_new)
+        .def_readonly("surf", &FMMMat::surf)
+        .def_readonly("p2p", &FMMMat::p2p)
+        .def_readonly("m2p", &FMMMat::m2p)
         .def_readonly("cfg", &FMMMat::cfg)
         .def_readonly("translation_surface_order", &FMMMat::translation_surface_order)
         .def_readonly("uc2e", &FMMMat::uc2e)
@@ -91,9 +112,13 @@ PYBIND11_PLUGIN(fmm) {
             auto* ptr = reinterpret_cast<double*>(v.request().ptr);
             return array_from_vector(m.p2p_eval(ptr));
         })
-        .def("eval", [] (FMMMat& m, NPArrayD v) {
+        .def("p2m_eval", [] (FMMMat& m, NPArrayD v) {
             auto* ptr = reinterpret_cast<double*>(v.request().ptr);
-            return array_from_vector(m.eval(ptr));
+            return array_from_vector(m.p2m_eval(ptr));
+        })
+        .def("m2p_eval", [] (FMMMat& m, NPArrayD multipoles) {
+            auto* ptr = reinterpret_cast<double*>(multipoles.request().ptr);
+            return array_from_vector(m.m2p_eval(ptr));
         });
 
     m.def("fmmmmmmm", &fmmmmmmm);
@@ -113,6 +138,22 @@ PYBIND11_PLUGIN(fmm) {
            obs_pts.request().shape[0], src_pts.request().shape[0],
            as_ptr<double>(params)},
           out.data());
+        return array_from_vector(out);
+    });
+
+    m.def("mf_direct_eval", [](std::string k_name, NPArrayD obs_pts, NPArrayD obs_ns,
+                            NPArrayD src_pts, NPArrayD src_ns, NPArrayD params, NPArrayD input) {
+        check_shape<3>(obs_pts);
+        check_shape<3>(obs_ns);
+        check_shape<3>(src_pts);
+        check_shape<3>(src_ns);
+        auto K = get_by_name(k_name);
+        std::vector<double> out(K.tensor_dim * obs_pts.request().shape[0]);
+        K.f_mf({as_ptr<Vec3>(obs_pts), as_ptr<Vec3>(obs_ns),
+           as_ptr<Vec3>(src_pts), as_ptr<Vec3>(src_ns),
+           obs_pts.request().shape[0], src_pts.request().shape[0],
+           as_ptr<double>(params)},
+          out.data(), as_ptr<double>(input));
         return array_from_vector(out);
     });
     return m.ptr();

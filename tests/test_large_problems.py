@@ -1,10 +1,14 @@
+import numpy as np
 from tectosaur.util.test_decorators import slow
+
+import tectosaur_fmm.fmm_wrapper as fmm
+from test_fmm import check_invr, run_full, rand_pts, check
 
 @slow
 def test_self_fmm():
     order = 60
     mac = 3.0
-    n = 15000
+    n = 1500
     k_name = "elasticU"
     params = [1.0, 0.25]
     pts = np.random.rand(n, 3)
@@ -24,18 +28,21 @@ def test_self_fmm():
     correct = correct_mat.dot(np.ones(n * 3))
     check(est, correct, 2)
 
-
 @slow
 def test_build_big():
     pts = np.random.rand(1000000, 3)
     import time
     start = time.time()
     kdtree = fmm.KDTree(pts, pts, 1)
-    test_print("KDTree took: " + str(time.time() - start))
+    print("KDTree took: " + str(time.time() - start))
 
 @slow
 def test_high_accuracy():
-    check_invr(*run_full(15000, rand_pts, 2.6, 200, "invr", []), accuracy = 8)
+    import time
+    start = time.time()
+    # check_invr(*run_full(15000, rand_pts, 2.6, 100, "invr", []), accuracy = 6)
+    run_full(300000, rand_pts, 2.6, 100, "invr", [])
+    print("took: " + str(time.time() - start))
 
 @slow
 def test_elasticH():
