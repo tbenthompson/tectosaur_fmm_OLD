@@ -29,7 +29,7 @@ def calc_translation_error(basis, E, C, MAC):
     src_pts, src_ns  = random_box_pts(n, 1.0 / np.sqrt(3))
     obs_pts, obs_ns  = random_box_pts(n, 10.0)
 
-    k_name = "elasticU"
+    k_name = "elasticH"
     params = np.array([1.0, 0.25])
     tensor_dim = 3
 

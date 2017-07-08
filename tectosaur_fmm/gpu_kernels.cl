@@ -54,7 +54,8 @@ void p2p_kernel_${K.name}(__global Real* out, __global Real* in,
         % endfor
 
         % for d in range(K.tensor_dim):
-        Real sum${dn(d)} = 0.0;
+        Real kahansum${dn(d)} = 0.0;
+        Real kahantemp${dn(d)} = 0.0;
         % endfor
 
         for (int j = src_start; j < src_end; j++) {
@@ -76,11 +77,22 @@ void p2p_kernel_${K.name}(__global Real* out, __global Real* in,
                 continue;
             }
 
+            Real sumx = 0.0;
+            Real sumy = 0.0;
+            Real sumz = 0.0;
             ${K.vector_code}
+            % for d in range(K.tensor_dim):
+                { //TODO: Is kahan summation necessary here?
+                    Real y = sum${dn(d)} - kahantemp${dn(d)};
+                    Real t = kahansum${dn(d)} + y;
+                    kahantemp${dn(d)} = (t - kahansum${dn(d)}) - y;
+                    kahansum${dn(d)} = t;
+                }
+            % endfor
         }
 
         % for d in range(K.tensor_dim):
-        atomic_fadd(&out[i * ${K.tensor_dim} + ${d}], sum${dn(d)});
+        atomic_fadd(&out[i * ${K.tensor_dim} + ${d}], kahansum${dn(d)});
         % endfor
     }
 }
