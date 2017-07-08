@@ -1,32 +1,54 @@
 import numpy as np
-from tectosaur.util.test_decorators import slow
+from tectosaur.util.test_decorators import slow, kernel
 
 import tectosaur_fmm.fmm_wrapper as fmm
+from tectosaur.ops.sparse_integral_op import farfield_pts_wrapper
 from test_fmm import check_invr, run_full, rand_pts, check
 
 @slow
 def test_self_fmm():
-    order = 60
-    mac = 3.0
-    n = 1500
-    k_name = "elasticU"
+# def test_self_fmm(kernel):
+    kernel = 'elasticH'
+    np.random.seed(10)
+    n = 5000
     params = [1.0, 0.25]
     pts = np.random.rand(n, 3)
     ns = np.random.rand(n, 3)
     ns /= np.linalg.norm(ns, axis = 1)[:,np.newaxis]
+
+    mac = 3.0
+    order = 40
+
     kd = fmm.KDTree(pts, ns, order)
     fmm_mat = fmm.fmmmmmmm(
-        kd, kd, fmm.FMMConfig(1.1, mac, order, k_name, params)
+        kd, kd, fmm.FMMConfig(1.1, mac, order, kernel, params)
     )
-    est = fmm.eval(fmm_mat, np.ones(n * 3))
+    tensor_dim = fmm_mat.cfg.tensor_dim()
+    input = np.random.rand(n * tensor_dim)
+    output = fmm.eval_ocl(fmm_mat, input)
+
+    # output = output.reshape((-1, 3))
+    # to_orig = np.empty_like(output)
+    # orig_idxs = np.array(kd.orig_idxs, np.int64)
+    # to_orig[orig_idxs,:] = output
+    # results.append(to_orig)
+    # results = np.array(results)
+
+
     correct_mat = fmm.direct_eval(
-        k_name, np.array(kd.pts), np.array(kd.normals),
+        kernel, np.array(kd.pts), np.array(kd.normals),
         np.array(kd.pts), np.array(kd.normals), params
-    ).reshape((n * 3, n * 3))
+    ).reshape((n * tensor_dim, n * tensor_dim))
     correct_mat[np.isnan(correct_mat)] = 0
     correct_mat[np.isinf(correct_mat)] = 0
-    correct = correct_mat.dot(np.ones(n * 3))
-    check(est, correct, 2)
+    correct2 = correct_mat.dot(input)
+
+    correct = farfield_pts_wrapper(
+        kernel, np.array(kd.pts), np.array(kd.normals),
+        np.array(kd.pts), np.array(kd.normals), input, params
+    )
+    check(output, correct, 2)
+    check(correct2, correct, 2)
 
 @slow
 def test_build_big():
@@ -47,7 +69,7 @@ def test_high_accuracy():
 @slow
 def test_elasticH():
     params = [1.0, 0.25]
-    K = "elasticT"
+    K = "elasticH"
     obs_pts, obs_ns, src_pts, src_ns, est = run_full(
         10000, ellipse_pts, 2.8, 52, K, params
     )

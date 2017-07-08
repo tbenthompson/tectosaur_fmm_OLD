@@ -10,7 +10,7 @@ kernels = kernel_exprs.get_kernels()
 #define Real double
 
 template <typename F>
-void direct_nbody(const NBodyProblem& p, double* out, const F& f) {
+void direct_nbody(const NBodyProblem& p, KernelReal* out, const F& f) {
 #pragma omp parallel for
     for (size_t i = 0; i < p.n_obs; i++) {
         for (size_t j = 0; j < p.n_src; j++) {
@@ -20,7 +20,7 @@ void direct_nbody(const NBodyProblem& p, double* out, const F& f) {
 }
 
 template <typename F>
-void mf_direct_nbody(const NBodyProblem& p, double* out, double* in, const F& f) {
+void mf_direct_nbody(const NBodyProblem& p, KernelReal* out, KernelReal* in, const F& f) {
 #pragma omp parallel for
     for (size_t i = 0; i < p.n_obs; i++) {
         for (size_t j = 0; j < p.n_src; j++) {
@@ -29,19 +29,19 @@ void mf_direct_nbody(const NBodyProblem& p, double* out, double* in, const F& f)
     }
 }
 
-double one_K(const Vec3&, const Vec3&, const Vec3&, const Vec3&) {
+KernelReal one_K(const Vec3&, const Vec3&, const Vec3&, const Vec3&) {
     return 1.0; 
 }
 
-void one(const NBodyProblem& p, double* out) {
+void one(const NBodyProblem& p, KernelReal* out) {
     direct_nbody(p, out, one_K);
 }
 
-void mf_one(const NBodyProblem& p, double* out, double* in) {
+void mf_one(const NBodyProblem& p, KernelReal* out, KernelReal* in) {
     mf_direct_nbody(p, out, in, one_K);
 }
 
-double invr_K(const Vec3& obs, const Vec3& nobs, const Vec3& src, const Vec3& nsrc) {
+KernelReal invr_K(const Vec3& obs, const Vec3& nobs, const Vec3& src, const Vec3& nsrc) {
     auto r = hypot(sub(obs, src));
     if (r == 0.0) {
         return 0.0;
@@ -49,15 +49,15 @@ double invr_K(const Vec3& obs, const Vec3& nobs, const Vec3& src, const Vec3& ns
     return 1.0 / r;
 }
 
-void invr(const NBodyProblem& p, double* out) {
+void invr(const NBodyProblem& p, KernelReal* out) {
     direct_nbody(p, out, invr_K);
 }
 
-void mf_invr(const NBodyProblem& p, double* out, double* in) {
+void mf_invr(const NBodyProblem& p, KernelReal* out, KernelReal* in) {
     mf_direct_nbody(p, out, in, invr_K);
 }
 
-void tensor_invr(const NBodyProblem& p, double* out) {
+void tensor_invr(const NBodyProblem& p, KernelReal* out) {
     for (size_t i = 0; i < p.n_obs; i++) {
         for (size_t j = 0; j < p.n_src; j++) {
             auto inv_r = 1.0 / hypot(sub(p.obs_pts[i], p.src_pts[j]));
@@ -72,7 +72,7 @@ void tensor_invr(const NBodyProblem& p, double* out) {
     }
 }
 
-void mf_tensor_invr(const NBodyProblem& p, double* out, double* in) {
+void mf_tensor_invr(const NBodyProblem& p, KernelReal* out, KernelReal* in) {
     for (size_t i = 0; i < p.n_obs; i++) {
         for (size_t j = 0; j < p.n_src; j++) {
             auto inv_r = 1.0 / hypot(sub(p.obs_pts[i], p.src_pts[j]));
@@ -87,22 +87,25 @@ void mf_tensor_invr(const NBodyProblem& p, double* out, double* in) {
     }
 }
 
-double laplace_double_K(const Vec3& obs, const Vec3& nobs, const Vec3& src, const Vec3& nsrc) {
+KernelReal laplace_double_K(const Vec3& obs, const Vec3& nobs, const Vec3& src, const Vec3& nsrc) {
     auto delta = sub(src, obs);
     auto r = hypot(delta);
+    if (r == 0) {
+        return 0.0; 
+    }
     return dot(delta, nsrc) / (4 * M_PI * r * r * r);
 }
 
-void laplace_double(const NBodyProblem& p, double* out) {
+void laplace_double(const NBodyProblem& p, KernelReal* out) {
     direct_nbody(p, out, laplace_double_K);
 }
 
-void mf_laplace_double(const NBodyProblem& p, double* out, double* in) {
+void mf_laplace_double(const NBodyProblem& p, KernelReal* out, KernelReal* in) {
     mf_direct_nbody(p, out, in, laplace_double_K);
 }
 
 <%def name="kernel_fnc(k_name)">\
-void elastic${k_name}(const NBodyProblem& p, double* out) {
+void elastic${k_name}(const NBodyProblem& p, KernelReal* out) {
     auto G = p.kernel_args[0];
     auto nu = p.kernel_args[1];
     (void)G;(void)nu;
@@ -123,11 +126,12 @@ void elastic${k_name}(const NBodyProblem& p, double* out) {
             auto yz = p.src_pts[j][2];
             (void)yx;(void)yy;(void)yz;
 
-            // If the src to obs distance is 0, then the output is just 0.
-            auto Dx = xx - yx;
-            auto Dy = xy - yy;
-            auto Dz = xz - yz;
+            auto Dx = yx - xx;
+            auto Dy = yy - xy;
+            auto Dz = yz - xz;
             auto R2 = Dx * Dx + Dy * Dy + Dz * Dz;
+
+            // If the src to obs distance is 0, then the output is just 0.
             if (R2 == 0.0) {
                 % for d1 in range(3):
                 % for d2 in range(3):
@@ -154,7 +158,7 @@ void elastic${k_name}(const NBodyProblem& p, double* out) {
 </%def>
 
 <%def name="mf_kernel_fnc(k_name)">\
-void mf_elastic${k_name}(const NBodyProblem& p, double* out, double* in) {
+void mf_elastic${k_name}(const NBodyProblem& p, KernelReal* out, KernelReal* in) {
     auto G = p.kernel_args[0];
     auto nu = p.kernel_args[1];
     (void)G;(void)nu;

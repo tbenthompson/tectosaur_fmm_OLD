@@ -27,7 +27,7 @@ def ellipse_pts(n, source):
     z = c * np.sin(uv[:, 0])
     return np.array([x, y, z]).T
 
-def run_full(n, make_pts, mac, order, kernel, params):
+def run_full(n, make_pts, mac, order, kernel, params, ocl = False):
     t = Timer()
     obs_pts = make_pts(n, False)
     obs_ns = make_pts(n, False)
@@ -49,7 +49,8 @@ def run_full(n, make_pts, mac, order, kernel, params):
     input_vals = np.ones(src_pts.shape[0] * tdim)
     n_outputs = obs_pts.shape[0] * tdim
 
-    est = fmm.eval(fmm_mat, input_vals)
+    if ocl:
+        est = fmm.eval_cpu(fmm_mat, input_vals)
     t.report('eval fmm')
     # est2 = fmm.mf_direct_eval(kernel, obs_pts, obs_ns, src_pts, src_ns, params, input_vals)
     # t.report('eval direct')
@@ -58,10 +59,6 @@ def run_full(n, make_pts, mac, order, kernel, params):
         np.array(obs_kd.pts), np.array(obs_kd.normals),
         np.array(src_kd.pts), np.array(src_kd.normals), est
     )
-
-def test_ones():
-    obs_pts, _, src_pts, _, est = run_full(5000, rand_pts, 0.5, 1, "one",[])
-    assert(np.all(np.abs(est - 5001) < 1e-3))
 
 def check(est, correct, accuracy):
     rmse = np.sqrt(np.mean((est - correct) ** 2))
@@ -83,6 +80,10 @@ def check_invr(obs_pts, _0, src_pts, _1, est, accuracy = 3):
     correct = correct_matrix.dot(np.ones(src_pts.shape[0]))
     check(est, correct, accuracy)
 
+def test_ones():
+    obs_pts, _, src_pts, _, est = run_full(5000, rand_pts, 0.5, 1, "one",[])
+    assert(np.all(np.abs(est - 5001) < 1e-3))
+
 def test_invr():
     check_invr(*run_full(5000, rand_pts, 2.6, 100, "invr", []))
 
@@ -96,7 +97,7 @@ def test_tensor():
 
 def test_double_layer():
     obs_pts, obs_ns, src_pts, src_ns, est = run_full(
-        6000, rand_pts, 3.0, 45, "laplace_double", []
+        20000, rand_pts, 3.0, 45, "laplace_double", []
     )
     correct_mat = fmm.direct_eval(
         "laplace_double", obs_pts, obs_ns, src_pts, src_ns, []

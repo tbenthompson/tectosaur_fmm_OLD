@@ -37,10 +37,9 @@ def test_kdtree_height_depth():
             max([kdtree.nodes[n.children[c]].height for c in range(2)]) + 1)
 
 def test_kdtree_orig_idx():
-    pts = np.random.rand(100,3)
-    kdtree = fmm.KDTree(pts, pts, 1)
-    for i, orig_i in enumerate(kdtree.orig_idxs):
-        np.testing.assert_almost_equal(kdtree.pts[i], pts[orig_i, :], 10)
+    pts = np.random.rand(1000,3)
+    kdtree = fmm.KDTree(pts, pts, 50)
+    np.testing.assert_almost_equal(np.array(kdtree.pts), pts[np.array(kdtree.orig_idxs), :])
 
 def test_kdtree_idx():
     pts = np.random.rand(100,3)

@@ -13,6 +13,7 @@ gpu_float_type = np_to_c_type(float_type)
 def template_kernels(cfg):
     import mako.template
     import mako.exceptions
+
     #TODO: GENERALIZE THIS?
     templates = ['fmm_kernels.thpp', 'fmm_kernels.tcpp']
 
@@ -26,7 +27,7 @@ def template_kernels(cfg):
         except Exception as e:
             raise e
         dirname = os.path.dirname(t)
-        filename,ext = os.path.splitext(t)
+        filename, ext = os.path.splitext(t)
         out_filename = os.path.join(fmm_dir, filename + '.' + ext[2:])
         print(out_filename)
         with open(out_filename, 'w') as f:
