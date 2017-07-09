@@ -126,40 +126,6 @@ std::vector<double> mat_mult(int n_out_rows, int n_out_cols,
     return out;
 }
 
-std::vector<double> svd_pseudoinverse(const SVDPtr& svd) {
-    auto n = svd->singular_values.size();
-    std::vector<double> left_singular_vectors = svd->left_singular_vectors;
-
-    double cutoff = svd->threshold * svd->singular_values[0];
-    for (size_t i = 0; i < n; i++) {
-        if (svd->singular_values[i] > cutoff) {
-            for (size_t j = 0; j < n; j++) {
-                left_singular_vectors[i * n + j] /= svd->singular_values[i];
-            }
-        } else {
-            for (size_t j = 0; j < n; j++) {
-                left_singular_vectors[i * n + j] = 0.0;
-            }
-        }
-    }
-    
-    // left_singular_vectors and right_singular_vectors are both in
-    // fortran column-major ordering, so that we can't use the mat_mult function
-    // here, which assumes row-major ordering.
-    std::vector<double> out(n * n);
-    char transa = 'T';
-    char transb = 'T';
-    int mn = static_cast<int>(n);
-    double alpha = 1;
-    double beta = 0;
-    dgemm_(
-        &transa, &transb, &mn, &mn, &mn, &alpha,
-        svd->right_singular_vectors.data(), &mn,
-        left_singular_vectors.data(), &mn,
-        &beta, out.data(), &mn
-    );
-    return out;
-}
 
 std::vector<double> svd_solve(const SVDPtr& svd, const std::vector<double>& b)
 {

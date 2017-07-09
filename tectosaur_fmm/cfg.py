@@ -53,7 +53,7 @@ def lib_cfg(cfg):
     setup_pybind11(cfg)
     cfg['compiler_args'] += ['-std=c++14', '-O3', '-g', '-Wall', '-Werror', '-fopenmp']
     cfg['sources'] += to_fmm_dir([
-        'fmm_impl.cpp', 'octree.cpp', 'kdtree.cpp', 'blas_wrapper.cpp', 'fmm_kernels.cpp'
+        'fmm_impl.cpp', 'kdtree.cpp', 'blas_wrapper.cpp', 'fmm_kernels.cpp'
     ])
     cfg['dependencies'] += to_fmm_dir([
         'fmm_impl.hpp', 'octree.hpp', 'kdtree.hpp', 'blas_wrapper.hpp',
@@ -69,7 +69,7 @@ def lib_cfg(cfg):
 
 def test_cfg(cfg):
     lib_cfg(cfg)
-    cfg['sources'] += ['test_blas.cpp', 'test_misc.cpp']
+    cfg['sources'] += ['test_blas.cpp', 'test_misc.cpp', 'test_octree.cpp']
     cfg['dependencies'] += ['test_helpers.hpp', 'doctest.h']
     cfg['include_dirs'] += [tectosaur_fmm.source_dir]
     template_kernels(cfg)
