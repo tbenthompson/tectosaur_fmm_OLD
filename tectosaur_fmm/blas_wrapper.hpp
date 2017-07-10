@@ -30,3 +30,21 @@ std::vector<double> mat_mult(int n_out_rows, int n_out_cols,
     bool transposeB, std::vector<double>& B);
 std::vector<double> matrix_vector_product(double* matrix, int n_rows,
     int n_cols, double* vector);
+
+struct Block {
+    size_t row_start;
+    size_t col_start;
+    int n_rows;
+    int n_cols;
+    size_t data_start;
+};
+
+struct BlockSparseMat {
+    std::vector<Block> blocks;
+    std::vector<double> vals;
+
+    std::vector<double> matvec(double* vec, size_t out_size);
+    size_t get_nnz() { return vals.size(); }
+};
+
+std::vector<double> qr_pseudoinverse(double* matrix, int n);

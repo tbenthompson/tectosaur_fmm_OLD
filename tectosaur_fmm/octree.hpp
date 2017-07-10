@@ -20,7 +20,7 @@ struct OctreeNode {
 };
 
 template <size_t dim>
-struct PtNormalREMOVE {
+struct PtNormal {
     std::array<double,dim> pt;
     std::array<double,dim> normal;
     size_t orig_idx;
@@ -28,10 +28,10 @@ struct PtNormalREMOVE {
 
 template <size_t dim>
 std::array<int,OctreeNode<dim>::split+1> octree_partition(
-        const Cube<dim>& bounds, PtNormalREMOVE<dim>* start, PtNormalREMOVE<dim>* end);
+        const Cube<dim>& bounds, PtNormal<dim>* start, PtNormal<dim>* end);
 
 template <size_t dim>
-std::vector<PtNormalREMOVE<dim>> combine_pts_normals(std::array<double,dim>* pts,
+std::vector<PtNormal<dim>> combine_pts_normals(std::array<double,dim>* pts,
         std::array<double,dim>* normals, size_t n_pts);
 
 template <size_t dim>
@@ -51,5 +51,5 @@ struct Octree {
 
     size_t add_node(size_t start, size_t end, 
         size_t n_per_cell, int depth, Cube<dim> bounds,
-        std::vector<PtNormalREMOVE<dim>>& temp_pts);
+        std::vector<PtNormal<dim>>& temp_pts);
 };

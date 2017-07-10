@@ -75,3 +75,11 @@ TEST_CASE("matrix vector 0 columns")
     REQUIRE(result.size() == size_t(0));
 }
 
+TEST_CASE("matvec") {
+    BlockSparseMat m{{{1, 1, 2, 2, 0}}, {0, 2, 1, 3}};
+    std::vector<double> in = {0, -1, 1};
+    auto out = m.matvec(in.data(), 3);
+    REQUIRE(out[0] == 0.0);
+    REQUIRE(out[1] == 2.0);
+    REQUIRE(out[2] == 2.0);
+}

@@ -103,30 +103,26 @@ def test_ones(dim):
     obs_pts, _, src_pts, _, est = run_full(5000, rand_pts(dim), 0.5, 1, "one",[])
     assert(np.all(np.abs(est - src_pts.shape[0]) < 1e-3))
 
-def test_p2p(dim):
-    K = "laplace_S"
-    check_kernel(K, *run_full(
-        1000, rand_pts(dim), 2.6, 1, K, [], max_pts_per_cell = 100000
+import pytest
+@pytest.fixture(params = ["laplaceS", "laplaceD", "laplaceH"])
+def laplace_kernel(request):
+    return request.param
+
+def test_p2p(laplace_kernel, dim):
+    check_kernel(laplace_kernel, *run_full(
+        1000, rand_pts(dim), 2.6, 1, laplace_kernel, [], max_pts_per_cell = 100000
     ), accuracy = 10)
 
-def test_m2p(dim):
-    K = "laplace_S"
-    check_kernel(K, *run_full(
-        10000, m2p_test_pts(dim), 2.6, 8 ** (dim - 1), K, [], max_pts_per_cell = 100000
+def test_m2p(laplace_kernel, dim):
+    check_kernel(laplace_kernel, *run_full(
+        10000, m2p_test_pts(dim), 2.6, 15 ** (dim - 1), laplace_kernel, [], max_pts_per_cell = 100000
     ), accuracy = 3)
 
-def test_single_layer(dim):
-    K = "laplace_S"
-    check_kernel(K, *run_full(10000, rand_pts(dim), 2.6, 8 ** (dim - 1), K, []))
-
-def test_double_layer(dim):
-    K = "laplace_D"
-    check_kernel(K, *run_full(10000, rand_pts(dim), 2.6, 8 ** (dim - 1), K, []))
-
-def test_hypersingular(dim):
-    K = "laplace_H"
-    check_kernel(K, *run_full(10000, rand_pts(dim), 2.6, 8 ** (dim - 1), K, []))
+def test_laplace(laplace_kernel, dim):
+    check_kernel(
+        laplace_kernel, *run_full(10000, rand_pts(dim), 2.6, 8 ** (dim - 1), laplace_kernel, [])
+    )
 
 def test_irregular():
-    K = "laplace_S"
+    K = "laplaceS"
     check_kernel(K, *run_full(10000, ellipsoid_pts, 2.6, 35, K, []))

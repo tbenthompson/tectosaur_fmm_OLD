@@ -11,11 +11,3 @@ TEST_CASE("inscribe") {
     REQUIRE_ARRAY_EQUAL(s[2], std::array<double,3>{1, 1, 2}, 3);
 }
 
-TEST_CASE("matvec") {
-    BlockSparseMat m{{{1, 1, 2, 2, 0}}, {0, 2, 1, 3}};
-    std::vector<double> in = {0, -1, 1};
-    auto out = m.matvec(in.data(), 3);
-    REQUIRE(out[0] == 0.0);
-    REQUIRE(out[1] == 2.0);
-    REQUIRE(out[2] == 2.0);
-}

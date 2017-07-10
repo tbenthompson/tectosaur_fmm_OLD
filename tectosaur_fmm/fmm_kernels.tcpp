@@ -274,11 +274,11 @@ template <>
 Kernel<2> get_by_name(std::string name) {
     if (name == "one") {
         return {one<2>, mf_one<2>, 1, name};
-    } else if (name == "laplace_D") {
+    } else if (name == "laplaceD") {
         return {laplace_D<2>, mf_laplace_D<2>, 1, name};   
-    } else if (name == "laplace_S") {
+    } else if (name == "laplaceS") {
         return {laplace_S<2>, mf_laplace_S<2>, 1, name};   
-    } else if (name == "laplace_H") {
+    } else if (name == "laplaceH") {
         return {laplace_H<2>, mf_laplace_H<2>, 1, name};   
     }
     throw std::runtime_error("invalid kernel name");
@@ -288,11 +288,11 @@ template <>
 Kernel<3> get_by_name(std::string name) {
     if (name == "one") {
         return {one<3>, mf_one<3>, 1, name};
-    } else if (name == "laplace_S") {
+    } else if (name == "laplaceS") {
         return {laplace_S<3>, mf_laplace_S<3>, 1, name};   
-    } else if (name == "laplace_D") {
+    } else if (name == "laplaceD") {
         return {laplace_D<3>, mf_laplace_D<3>, 1, name};   
-    } else if (name == "laplace_H") {
+    } else if (name == "laplaceH") {
         return {laplace_H<3>, mf_laplace_H<3>, 1, name};   
     % for k_name in kernel_names:
     } else if (name == "elastic${k_name}") {

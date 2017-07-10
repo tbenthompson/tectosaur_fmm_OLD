@@ -2,9 +2,9 @@
 
 template <size_t dim>
 std::array<int,OctreeNode<dim>::split+1> octree_partition(
-        const Cube<dim>& bounds, PtNormalREMOVE<dim>* start, PtNormalREMOVE<dim>* end) 
+        const Cube<dim>& bounds, PtNormal<dim>* start, PtNormal<dim>* end) 
 {
-    std::array<std::vector<PtNormalREMOVE<dim>>,OctreeNode<dim>::split> chunks{};
+    std::array<std::vector<PtNormal<dim>>,OctreeNode<dim>::split> chunks{};
     for (auto* entry = start; entry < end; entry++) {
         chunks[find_containing_subcell(bounds, entry->pt)].push_back(*entry);
     }
@@ -24,10 +24,10 @@ std::array<int,OctreeNode<dim>::split+1> octree_partition(
 }
 
 template <size_t dim>
-std::vector<PtNormalREMOVE<dim>> combine_pts_normals(std::array<double,dim>* pts,
+std::vector<PtNormal<dim>> combine_pts_normals(std::array<double,dim>* pts,
         std::array<double,dim>* normals, size_t n_pts) 
 {
-    std::vector<PtNormalREMOVE<dim>> pts_normals(n_pts);
+    std::vector<PtNormal<dim>> pts_normals(n_pts);
     for (size_t i = 0; i < n_pts; i++) {
         pts_normals[i] = {pts[i], normals[i], i};
     }
@@ -65,7 +65,7 @@ Octree<dim>::Octree(std::array<double,dim>* in_pts, std::array<double,dim>* in_n
 template <size_t dim>
 size_t Octree<dim>::add_node(size_t start, size_t end, 
     size_t n_per_cell, int depth, Cube<dim> bounds,
-    std::vector<PtNormalREMOVE<dim>>& temp_pts)
+    std::vector<PtNormal<dim>>& temp_pts)
 {
     bool is_leaf = end - start <= n_per_cell; 
     auto n_idx = nodes.size();
@@ -86,6 +86,11 @@ size_t Octree<dim>::add_node(size_t start, size_t end,
     }
     return n_idx;
 }
+
+template std::vector<PtNormal<2>> combine_pts_normals(std::array<double,2>* pts,
+        std::array<double,2>* normals, size_t n_pts);
+template std::vector<PtNormal<3>> combine_pts_normals(std::array<double,3>* pts,
+        std::array<double,3>* normals, size_t n_pts);
 
 template struct Octree<2>;
 template struct Octree<3>;

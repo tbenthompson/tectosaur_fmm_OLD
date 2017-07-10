@@ -186,3 +186,44 @@ std::vector<double> matrix_vector_product(double* matrix, int n_rows,
     return out;
 }
 
+extern "C" void dgemv_(char* TRANS, int* M, int* N, double* ALPHA, double* A,
+                       int* LDA, double* X, int* INCX, double* BETA, double* Y,
+                       int* INCY);
+std::vector<double> BlockSparseMat::matvec(double* vec, size_t out_size) {
+    char transpose = 'T';
+    double alpha = 1;
+    double beta = 1;
+    int inc = 1;
+    std::vector<double> out(out_size, 0.0);
+    for (size_t b_idx = 0; b_idx < blocks.size(); b_idx++) {
+        auto& b = blocks[b_idx];
+        dgemv_(
+            &transpose, &b.n_cols, &b.n_rows, &alpha, &vals[b.data_start],
+            &b.n_cols, &vec[b.col_start], &inc, &beta, &out[b.row_start], &inc
+        );
+    }
+    return out;
+}
+
+extern "C" void dgelsy_(int* M, int* N, int* NRHS, double* A, int* LDA,
+                        double* B, int* LDB, int* JPVT, double* RCOND,
+                        int* RANK, double* WORK, int* LWORK, int* INFO);
+
+std::vector<double> qr_pseudoinverse(double* matrix, int n) {
+    std::vector<double> rhs(n * n, 0.0);
+    for (int i = 0; i < n; i++) {
+        rhs[i * n + i] = 1.0;
+    }
+
+    std::vector<int> jpvt(n, 0);
+    int lwork = 4 * n + 1;
+    std::vector<double> work(lwork);
+    int rank;
+    int info;
+    double rcond = 1e-15;
+    dgelsy_(&n, &n, &n, matrix, &n, rhs.data(), &n, jpvt.data(), &rcond, &rank,
+            work.data(), &lwork, &info);
+    return rhs;
+}
+
+

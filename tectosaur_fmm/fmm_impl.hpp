@@ -5,6 +5,7 @@
 #include <memory>
 #include "fmm_kernels.hpp"
 #include "octree.hpp"
+#include "blas_wrapper.hpp"
 
 template <size_t dim>
 std::vector<std::array<double,dim>> inscribe_surf(const Cube<dim>& b, double scaling,
@@ -32,22 +33,6 @@ struct FMMConfig {
 
     std::string kernel_name() const { return kernel.name; }
     int tensor_dim() const { return kernel.tensor_dim; }
-};
-
-struct Block {
-    size_t row_start;
-    size_t col_start;
-    int n_rows;
-    int n_cols;
-    size_t data_start;
-};
-
-struct BlockSparseMat {
-    std::vector<Block> blocks;
-    std::vector<double> vals;
-
-    std::vector<double> matvec(double* vec, size_t out_size);
-    size_t get_nnz() { return vals.size(); }
 };
 
 struct MatrixFreeOp {
