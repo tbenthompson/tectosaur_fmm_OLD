@@ -18,6 +18,7 @@ std::vector<std::array<double,dim>> inscribe_surf(const Cube<dim>& b, double sca
     return out;
 }
 
+template <size_t dim>
 struct FMMConfig {
     // The MAC needs to < (1.0 / (check_r - 1)) so that farfield
     // approximations aren't used when the check surface intersects the
@@ -26,7 +27,7 @@ struct FMMConfig {
     double inner_r;
     double outer_r;
     size_t order;
-    Kernel kernel;
+    Kernel<dim> kernel;
     std::vector<double> params;
 
     std::string kernel_name() const { return kernel.name; }
@@ -57,17 +58,33 @@ struct MatrixFreeOp {
     std::vector<int> src_n_end;
     std::vector<int> src_n_idx;
 
-    void insert(const OctreeNode<3>& obs_n, const OctreeNode<3>& src_n);
+    template <size_t dim>
+    void insert(const OctreeNode<dim>& obs_n, const OctreeNode<dim>& src_n) {
+        obs_n_start.push_back(obs_n.start);
+        obs_n_end.push_back(obs_n.end);
+        obs_n_idx.push_back(obs_n.idx);
+        src_n_start.push_back(src_n.start);
+        src_n_end.push_back(src_n.end);
+        src_n_idx.push_back(src_n.idx);
+    }
 };
 
+template <size_t dim>
 struct FMMMat {
     Octree<3> obs_tree;
     Octree<3> src_tree;
-    FMMConfig cfg;
+    FMMConfig<3> cfg;
     std::vector<std::array<double,3>> surf;
     int translation_surface_order;
 
-    FMMMat(Octree<3> obs_tree, Octree<3> src_tree, FMMConfig cfg,
+    MatrixFreeOp p2p;
+    MatrixFreeOp p2m;
+    MatrixFreeOp m2p;
+    std::vector<MatrixFreeOp> m2m;
+
+    std::vector<BlockSparseMat> uc2e;
+
+    FMMMat(Octree<3> obs_tree, Octree<3> src_tree, FMMConfig<3> cfg,
         std::vector<std::array<double,3>> surf);
 
     std::vector<std::array<double,3>> get_surf(const OctreeNode<3>& src_n, double r);
@@ -82,13 +99,7 @@ struct FMMMat {
     std::vector<double> p2p_eval(double* in);
     std::vector<double> p2m_eval(double* in);
     std::vector<double> m2p_eval(double* multipoles);
-
-    MatrixFreeOp p2p;
-    MatrixFreeOp p2m;
-    MatrixFreeOp m2p;
-    std::vector<MatrixFreeOp> m2m;
-
-    std::vector<BlockSparseMat> uc2e;
 };
 
-FMMMat fmmmmmmm(const Octree<3>& obs_tree, const Octree<3>& src_tree, const FMMConfig& cfg);
+template <size_t dim>
+FMMMat<dim> fmmmmmmm(const Octree<3>& obs_tree, const Octree<3>& src_tree, const FMMConfig<3>& cfg);

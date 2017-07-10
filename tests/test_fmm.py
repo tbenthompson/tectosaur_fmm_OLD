@@ -40,8 +40,8 @@ def run_full(n, make_pts, mac, order, kernel, params, ocl = False):
     obs_kd = fmm.three.Octree(obs_pts, obs_ns, order)
     src_kd = fmm.three.Octree(src_pts, src_ns, order)
     t.report('build trees')
-    fmm_mat = fmm.fmmmmmmm(
-        obs_kd, src_kd, fmm.FMMConfig(1.1, mac, order, kernel, params)
+    fmm_mat = fmm.three.fmmmmmmm(
+        obs_kd, src_kd, fmm.three.FMMConfig(1.1, mac, order, kernel, params)
     )
     t.report('setup fmm')
 

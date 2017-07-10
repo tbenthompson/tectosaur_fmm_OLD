@@ -10,8 +10,8 @@ kernels = kernel_exprs.get_kernels()
 
 #define Real double
 
-template <typename F>
-void direct_nbody(const NBodyProblem& p, KernelReal* out, const F& f) {
+template <size_t dim, typename F>
+void direct_nbody(const NBodyProblem<dim>& p, KernelReal* out, const F& f) {
 #pragma omp parallel for
     for (size_t i = 0; i < p.n_obs; i++) {
         for (size_t j = 0; j < p.n_src; j++) {
@@ -20,8 +20,8 @@ void direct_nbody(const NBodyProblem& p, KernelReal* out, const F& f) {
     }
 }
 
-template <typename F>
-void mf_direct_nbody(const NBodyProblem& p, KernelReal* out, KernelReal* in, const F& f) {
+template <size_t dim, typename F>
+void mf_direct_nbody(const NBodyProblem<dim>& p, KernelReal* out, KernelReal* in, const F& f) {
 #pragma omp parallel for
     for (size_t i = 0; i < p.n_obs; i++) {
         for (size_t j = 0; j < p.n_src; j++) {
@@ -34,12 +34,12 @@ KernelReal one_K(const std::array<double,3>&, const std::array<double,3>&, const
     return 1.0; 
 }
 
-void one(const NBodyProblem& p, KernelReal* out) {
-    direct_nbody(p, out, one_K);
+void one(const NBodyProblem<3>& p, KernelReal* out) {
+    direct_nbody<3>(p, out, one_K);
 }
 
-void mf_one(const NBodyProblem& p, KernelReal* out, KernelReal* in) {
-    mf_direct_nbody(p, out, in, one_K);
+void mf_one(const NBodyProblem<3>& p, KernelReal* out, KernelReal* in) {
+    mf_direct_nbody<3>(p, out, in, one_K);
 }
 
 KernelReal invr_K(const std::array<double,3>& obs, const std::array<double,3>& nobs,
@@ -52,15 +52,15 @@ KernelReal invr_K(const std::array<double,3>& obs, const std::array<double,3>& n
     return 1.0 / r;
 }
 
-void invr(const NBodyProblem& p, KernelReal* out) {
+void invr(const NBodyProblem<3>& p, KernelReal* out) {
     direct_nbody(p, out, invr_K);
 }
 
-void mf_invr(const NBodyProblem& p, KernelReal* out, KernelReal* in) {
+void mf_invr(const NBodyProblem<3>& p, KernelReal* out, KernelReal* in) {
     mf_direct_nbody(p, out, in, invr_K);
 }
 
-void tensor_invr(const NBodyProblem& p, KernelReal* out) {
+void tensor_invr(const NBodyProblem<3>& p, KernelReal* out) {
     for (size_t i = 0; i < p.n_obs; i++) {
         for (size_t j = 0; j < p.n_src; j++) {
             auto inv_r = 1.0 / hypot(sub(p.obs_pts[i], p.src_pts[j]));
@@ -75,7 +75,7 @@ void tensor_invr(const NBodyProblem& p, KernelReal* out) {
     }
 }
 
-void mf_tensor_invr(const NBodyProblem& p, KernelReal* out, KernelReal* in) {
+void mf_tensor_invr(const NBodyProblem<3>& p, KernelReal* out, KernelReal* in) {
     for (size_t i = 0; i < p.n_obs; i++) {
         for (size_t j = 0; j < p.n_src; j++) {
             auto inv_r = 1.0 / hypot(sub(p.obs_pts[i], p.src_pts[j]));
@@ -101,16 +101,16 @@ KernelReal laplace_double_K(const std::array<double,3>& obs, const std::array<do
     return dot(delta, nsrc) / (4 * M_PI * r * r * r);
 }
 
-void laplace_double(const NBodyProblem& p, KernelReal* out) {
+void laplace_double(const NBodyProblem<3>& p, KernelReal* out) {
     direct_nbody(p, out, laplace_double_K);
 }
 
-void mf_laplace_double(const NBodyProblem& p, KernelReal* out, KernelReal* in) {
+void mf_laplace_double(const NBodyProblem<3>& p, KernelReal* out, KernelReal* in) {
     mf_direct_nbody(p, out, in, laplace_double_K);
 }
 
 <%def name="kernel_fnc(k_name)">\
-void elastic${k_name}(const NBodyProblem& p, KernelReal* out) {
+void elastic${k_name}(const NBodyProblem<3>& p, KernelReal* out) {
     auto G = p.kernel_args[0];
     auto nu = p.kernel_args[1];
     (void)G;(void)nu;
@@ -163,7 +163,7 @@ void elastic${k_name}(const NBodyProblem& p, KernelReal* out) {
 </%def>
 
 <%def name="mf_kernel_fnc(k_name)">\
-void mf_elastic${k_name}(const NBodyProblem& p, KernelReal* out, KernelReal* in) {
+void mf_elastic${k_name}(const NBodyProblem<3>& p, KernelReal* out, KernelReal* in) {
     auto G = p.kernel_args[0];
     auto nu = p.kernel_args[1];
     (void)G;(void)nu;
@@ -213,7 +213,13 @@ ${kernel_fnc(k_name)}
 ${mf_kernel_fnc(k_name)}
 % endfor
 
-Kernel get_by_name(std::string name) {
+template <>
+Kernel<2> get_by_name(std::string name) {
+    throw std::runtime_error("invalid kernel name");
+}
+
+template <>
+Kernel<3> get_by_name(std::string name) {
     if (name == "one") {
         return {one, mf_one, 1, name};
     } else if (name == "invr") {
@@ -230,3 +236,4 @@ Kernel get_by_name(std::string name) {
         throw std::runtime_error("invalid kernel name");
     }
 }
+
