@@ -3,7 +3,7 @@ from tectosaur.util.test_decorators import slow, kernel
 
 import tectosaur_fmm.fmm_wrapper as fmm
 from tectosaur.ops.sparse_integral_op import farfield_pts_wrapper
-from test_fmm import check_invr, run_full, rand_pts, check
+from test_fmm import run_full, rand_pts, check
 
 # test fmm with elastic kernels more, this is confusing...
 # i think there are a variety of issues here.

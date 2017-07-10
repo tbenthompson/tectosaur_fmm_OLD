@@ -1,5 +1,5 @@
 do the QR decompositions for the C2E operator by using viennacl!!!!
-
+prune the C2E operator construction based on which ones are actually used.
 use the uniformity of the octree to limit the number of kernels.
 
 move fmm_integral_op into this package
@@ -11,10 +11,6 @@ optimize gpu kernels
 read about the implementation of the high-performance volumetric integration tools.
 
 reading exafmm stuff is interesting: https://github.com/exafmm/exafmm-alpha/blob/master/gpu/traversal.h
-
-2D fmm
-
-test laplace single layer and laplace hypersingular
 
 why didn't the fft stuff work for the m2l in the past?
 https://stackoverflow.com/questions/18384054/what-are-the-downsides-of-convolution-by-fft-compared-to-realspace-convolution

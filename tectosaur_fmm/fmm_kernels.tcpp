@@ -48,57 +48,49 @@ void mf_one(const NBodyProblem<dim>& p, KernelReal* out, KernelReal* in) {
 }
 
 template <size_t dim>
-KernelReal invr_K(const std::array<double,dim>& obs, const std::array<double,dim>& nobs,
-        const std::array<double,dim>& src, const std::array<double,dim>& nsrc) 
+KernelReal laplace_S_K(const std::array<double,dim>& obs, const std::array<double,dim>& nobs,
+        const std::array<double,dim>& src, const std::array<double,dim>& nsrc);
+
+template <>
+KernelReal laplace_S_K(const std::array<double,3>& obs, const std::array<double,3>& nobs,
+        const std::array<double,3>& src, const std::array<double,3>& nsrc) 
 {
-    auto r = hypot(sub(obs, src));
-    if (r == 0.0) {
-        return 0.0;
+    auto delta = sub(src, obs);
+    auto r = hypot(delta);
+    if (r == 0) {
+        return 0.0; 
     }
-    return 1.0 / r;
+    return 1.0 / (4.0 * M_PI * r);
+}
+
+template <>
+KernelReal laplace_S_K(const std::array<double,2>& obs, const std::array<double,2>& nobs,
+        const std::array<double,2>& src, const std::array<double,2>& nsrc) 
+{
+    auto delta = sub(src, obs);
+    auto r = hypot(delta);
+    if (r == 0) {
+        return 0.0; 
+    }
+    return std::log(r) / (2 * M_PI);
 }
 
 template <size_t dim>
-void invr(const NBodyProblem<dim>& p, KernelReal* out) {
-    direct_nbody(p, out, invr_K<dim>);
+void laplace_S(const NBodyProblem<dim>& p, KernelReal* out) {
+    direct_nbody(p, out, laplace_S_K<dim>);
 }
 
 template <size_t dim>
-void mf_invr(const NBodyProblem<dim>& p, KernelReal* out, KernelReal* in) {
-    mf_direct_nbody(p, out, in, invr_K<dim>);
+void mf_laplace_S(const NBodyProblem<dim>& p, KernelReal* out, KernelReal* in) {
+    mf_direct_nbody(p, out, in, laplace_S_K<dim>);
 }
 
-void tensor_invr(const NBodyProblem<3>& p, KernelReal* out) {
-    for (size_t i = 0; i < p.n_obs; i++) {
-        for (size_t j = 0; j < p.n_src; j++) {
-            auto inv_r = 1.0 / hypot(sub(p.obs_pts[i], p.src_pts[j]));
-            for (int d1 = 0; d1 < 3; d1++) {
-                for (int d2 = 0; d2 < 3; d2++) {
-                    auto row = i * 3 + d1;
-                    auto col = j * 3 + d2;
-                    out[row * (p.n_src * 3) + col] = inv_r;
-                }
-            }
-        }
-    }
-}
+template <size_t dim>
+KernelReal laplace_D_K(const std::array<double,dim>& obs, const std::array<double,dim>& nobs,
+        const std::array<double,dim>& src, const std::array<double,dim>& nsrc);
 
-void mf_tensor_invr(const NBodyProblem<3>& p, KernelReal* out, KernelReal* in) {
-    for (size_t i = 0; i < p.n_obs; i++) {
-        for (size_t j = 0; j < p.n_src; j++) {
-            auto inv_r = 1.0 / hypot(sub(p.obs_pts[i], p.src_pts[j]));
-            for (int d1 = 0; d1 < 3; d1++) {
-                for (int d2 = 0; d2 < 3; d2++) {
-                    auto row = i * 3 + d1;
-                    auto col = j * 3 + d2;
-                    out[row] += inv_r * in[col];
-                }
-            }
-        }
-    }
-}
-
-KernelReal laplace_double_K(const std::array<double,3>& obs, const std::array<double,3>& nobs,
+template <>
+KernelReal laplace_D_K(const std::array<double,3>& obs, const std::array<double,3>& nobs,
         const std::array<double,3>& src, const std::array<double,3>& nsrc) 
 {
     auto delta = sub(src, obs);
@@ -109,13 +101,70 @@ KernelReal laplace_double_K(const std::array<double,3>& obs, const std::array<do
     return dot(delta, nsrc) / (4 * M_PI * r * r * r);
 }
 
-void laplace_double(const NBodyProblem<3>& p, KernelReal* out) {
-    direct_nbody(p, out, laplace_double_K);
+template <>
+KernelReal laplace_D_K(const std::array<double,2>& obs, const std::array<double,2>& nobs,
+        const std::array<double,2>& src, const std::array<double,2>& nsrc) 
+{
+    auto delta = sub(src, obs);
+    auto r = hypot(delta);
+    if (r == 0) {
+        return 0.0; 
+    }
+    return dot(delta, nsrc) / (2 * M_PI * r * r);
 }
 
-void mf_laplace_double(const NBodyProblem<3>& p, KernelReal* out, KernelReal* in) {
-    mf_direct_nbody(p, out, in, laplace_double_K);
+template <size_t dim>
+void laplace_D(const NBodyProblem<dim>& p, KernelReal* out) {
+    direct_nbody(p, out, laplace_D_K<dim>);
 }
+
+template <size_t dim>
+void mf_laplace_D(const NBodyProblem<dim>& p, KernelReal* out, KernelReal* in) {
+    mf_direct_nbody(p, out, in, laplace_D_K<dim>);
+}
+
+template <size_t dim>
+KernelReal laplace_H_K(const std::array<double,dim>& obs, const std::array<double,dim>& nobs,
+        const std::array<double,dim>& src, const std::array<double,dim>& nsrc);
+
+template <>
+KernelReal laplace_H_K(const std::array<double,3>& obs, const std::array<double,3>& nobs,
+        const std::array<double,3>& src, const std::array<double,3>& nsrc) 
+{
+    auto delta = sub(src, obs);
+    auto r = hypot(delta);
+    auto r2 = r * r;
+    if (r == 0) {
+        return 0.0; 
+    }
+    return - ((dot(nobs, nsrc) / (r * r2)) - ((3 * dot(nsrc, delta) * dot(nobs, delta))/(r2 * r2 * r))) / (4 * M_PI);
+}
+
+template <>
+KernelReal laplace_H_K(const std::array<double,2>& obs, const std::array<double,2>& nobs,
+        const std::array<double,2>& src, const std::array<double,2>& nsrc) 
+{
+    auto delta = sub(src, obs);
+    auto r = hypot(delta);
+    auto r2 = r * r;
+    if (r == 0) {
+        return 0.0; 
+    }
+    return ((-dot(nobs, nsrc) / r2) + ((2 * dot(nsrc, delta) * dot(nobs, delta)) / (r2 * r2))) 
+        / (2 * M_PI);
+}
+
+template <size_t dim>
+void laplace_H(const NBodyProblem<dim>& p, KernelReal* out) {
+    direct_nbody(p, out, laplace_H_K<dim>);
+}
+
+template <size_t dim>
+void mf_laplace_H(const NBodyProblem<dim>& p, KernelReal* out, KernelReal* in) {
+    mf_direct_nbody(p, out, in, laplace_H_K<dim>);
+}
+
+
 
 <%def name="kernel_fnc(k_name)">\
 void elastic${k_name}(const NBodyProblem<3>& p, KernelReal* out) {
@@ -225,8 +274,12 @@ template <>
 Kernel<2> get_by_name(std::string name) {
     if (name == "one") {
         return {one<2>, mf_one<2>, 1, name};
-    } else if (name == "invr") {
-        return {invr<2>, mf_invr<2>, 1, name};
+    } else if (name == "laplace_D") {
+        return {laplace_D<2>, mf_laplace_D<2>, 1, name};   
+    } else if (name == "laplace_S") {
+        return {laplace_S<2>, mf_laplace_S<2>, 1, name};   
+    } else if (name == "laplace_H") {
+        return {laplace_H<2>, mf_laplace_H<2>, 1, name};   
     }
     throw std::runtime_error("invalid kernel name");
 }
@@ -235,12 +288,12 @@ template <>
 Kernel<3> get_by_name(std::string name) {
     if (name == "one") {
         return {one<3>, mf_one<3>, 1, name};
-    } else if (name == "invr") {
-        return {invr<3>, mf_invr<3>, 1, name};
-    } else if (name == "tensor_invr") {
-        return {tensor_invr, mf_tensor_invr, 3, name};
-    } else if (name == "laplace_double") {
-        return {laplace_double, mf_laplace_double, 1, name};   
+    } else if (name == "laplace_S") {
+        return {laplace_S<3>, mf_laplace_S<3>, 1, name};   
+    } else if (name == "laplace_D") {
+        return {laplace_D<3>, mf_laplace_D<3>, 1, name};   
+    } else if (name == "laplace_H") {
+        return {laplace_H<3>, mf_laplace_H<3>, 1, name};   
     % for k_name in kernel_names:
     } else if (name == "elastic${k_name}") {
         return {elastic${k_name}, mf_elastic${k_name}, 3, name};

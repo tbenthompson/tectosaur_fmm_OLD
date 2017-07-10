@@ -31,7 +31,17 @@ def ellipsoid_pts(n, source):
     z = c * np.sin(uv[:, 0])
     return np.array([x, y, z]).T
 
-def run_full(n, make_pts, mac, order, kernel, params, ocl = False):
+def m2p_test_pts(dim):
+    def f(n, is_source):
+        out = np.random.rand(n, dim)
+        if is_source:
+            out += 3.5
+        return out
+    return f
+
+def run_full(n, make_pts, mac, order, kernel, params, ocl = False, max_pts_per_cell = None):
+    if max_pts_per_cell is None:
+        max_pts_per_cell = order
     t = Timer()
     obs_pts = make_pts(n, False)
     obs_ns = make_pts(n, False)
@@ -43,8 +53,8 @@ def run_full(n, make_pts, mac, order, kernel, params, ocl = False):
 
     dim = obs_pts.shape[1]
 
-    obs_kd = module[dim].Octree(obs_pts, obs_ns, order)
-    src_kd = module[dim].Octree(src_pts, src_ns, order)
+    obs_kd = module[dim].Octree(obs_pts, obs_ns, max_pts_per_cell)
+    src_kd = module[dim].Octree(src_pts, src_ns, max_pts_per_cell)
     t.report('build trees')
     fmm_mat = module[dim].fmmmmmmm(
         obs_kd, src_kd, module[dim].FMMConfig(1.1, mac, order, kernel, params)
@@ -80,52 +90,43 @@ def check(est, correct, accuracy):
     rhs = correct / rms_c
     np.testing.assert_almost_equal(lhs, rhs, accuracy)
 
-def check_invr(obs_pts, _0, src_pts, _1, est, accuracy = 3):
-    correct_matrix = 1.0 / (scipy.spatial.distance.cdist(obs_pts, src_pts))
-    correct_matrix[np.isnan(correct_matrix)] = 0
-    correct_matrix[np.isinf(correct_matrix)] = 0
-
-    correct = correct_matrix.dot(np.ones(src_pts.shape[0]))
+def check_kernel(K, obs_pts, obs_ns, src_pts, src_ns, est, accuracy = 3):
+    dim = obs_pts.shape[1]
+    tensor_dim = int(est.size / obs_pts.shape[0])
+    correct_mat = module[dim].direct_eval(
+        K, obs_pts, obs_ns, src_pts, src_ns, []
+    ).reshape((obs_pts.shape[0] * tensor_dim, src_pts.shape[0] * tensor_dim))
+    correct = correct_mat.dot(np.ones(src_pts.shape[0]))
     check(est, correct, accuracy)
 
 def test_ones(dim):
     obs_pts, _, src_pts, _, est = run_full(5000, rand_pts(dim), 0.5, 1, "one",[])
-    assert(np.all(np.abs(est - 5001) < 1e-3))
+    assert(np.all(np.abs(est - src_pts.shape[0]) < 1e-3))
 
-def m2p_test_pts(dim):
-    def f(n, is_source):
-        out = np.random.rand(n, dim)
-        if is_source:
-            out += 5.0
-        return out
-    return f
+def test_p2p(dim):
+    K = "laplace_S"
+    check_kernel(K, *run_full(
+        1000, rand_pts(dim), 2.6, 1, K, [], max_pts_per_cell = 100000
+    ), accuracy = 10)
 
 def test_m2p(dim):
-    results = []
-    for order in [2, 4, 8, 15, 32]:
-        np.random.seed(11)
-        results.append(run_full(5000, m2p_test_pts(dim), 3.0, order, "invr", [])[3])
-    results = np.array(results)
-    import ipdb; ipdb.set_trace()
-    # check_invr(*run_full(5000, m2p_test_pts(dim), 3.0, 3, "invr", []))
+    K = "laplace_S"
+    check_kernel(K, *run_full(
+        10000, m2p_test_pts(dim), 2.6, 8 ** (dim - 1), K, [], max_pts_per_cell = 100000
+    ), accuracy = 3)
 
-def test_invr(dim):
-    check_invr(*run_full(5000, rand_pts(dim), 3.0, 100, "invr", []))
+def test_single_layer(dim):
+    K = "laplace_S"
+    check_kernel(K, *run_full(10000, rand_pts(dim), 2.6, 8 ** (dim - 1), K, []))
+
+def test_double_layer(dim):
+    K = "laplace_D"
+    check_kernel(K, *run_full(10000, rand_pts(dim), 2.6, 8 ** (dim - 1), K, []))
+
+def test_hypersingular(dim):
+    K = "laplace_H"
+    check_kernel(K, *run_full(10000, rand_pts(dim), 2.6, 8 ** (dim - 1), K, []))
 
 def test_irregular():
-    check_invr(*run_full(10000, ellipsoid_pts, 2.6, 35, "invr", []))
-
-def test_tensor():
-    obs_pts, _, src_pts, _, est = run_full(5000, rand_pts(3), 2.6, 35, "tensor_invr", [])
-    for d in range(3):
-        check_invr(obs_pts, _, src_pts, _, est[d::3] / 3.0)
-
-def test_double_layer():
-    obs_pts, obs_ns, src_pts, src_ns, est = run_full(
-        20000, rand_pts(3), 3.0, 45, "laplace_double", []
-    )
-    correct_mat = fmm.three.direct_eval(
-        "laplace_double", obs_pts, obs_ns, src_pts, src_ns, []
-    ).reshape((obs_pts.shape[0], src_pts.shape[0]))
-    correct = correct_mat.dot(np.ones(src_pts.shape[0]))
-    check(est, correct, 3)
+    K = "laplace_S"
+    check_kernel(K, *run_full(10000, ellipsoid_pts, 2.6, 35, K, []))

@@ -1,4 +1,6 @@
 #pragma once
+#include <array>
+#include <cmath>
 
 template <size_t dim>
 inline double dot(const std::array<double,dim>& a, const std::array<double,dim>& b) {
