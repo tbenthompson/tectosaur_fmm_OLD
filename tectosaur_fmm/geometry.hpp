@@ -34,7 +34,7 @@ struct Cube {
     double width;
 
     double R() const {
-        return width * std::sqrt(3.0);
+        return width * std::sqrt(static_cast<double>(dim));
     }
 };
 

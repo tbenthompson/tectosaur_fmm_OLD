@@ -71,10 +71,10 @@ struct MatrixFreeOp {
 
 template <size_t dim>
 struct FMMMat {
-    Octree<3> obs_tree;
-    Octree<3> src_tree;
-    FMMConfig<3> cfg;
-    std::vector<std::array<double,3>> surf;
+    Octree<dim> obs_tree;
+    Octree<dim> src_tree;
+    FMMConfig<dim> cfg;
+    std::vector<std::array<double,dim>> surf;
     int translation_surface_order;
 
     MatrixFreeOp p2p;
@@ -84,10 +84,10 @@ struct FMMMat {
 
     std::vector<BlockSparseMat> uc2e;
 
-    FMMMat(Octree<3> obs_tree, Octree<3> src_tree, FMMConfig<3> cfg,
-        std::vector<std::array<double,3>> surf);
+    FMMMat(Octree<dim> obs_tree, Octree<dim> src_tree, FMMConfig<dim> cfg,
+        std::vector<std::array<double,dim>> surf);
 
-    std::vector<std::array<double,3>> get_surf(const OctreeNode<3>& src_n, double r);
+    std::vector<std::array<double,dim>> get_surf(const OctreeNode<dim>& src_n, double r);
     
     int tensor_dim() const { return cfg.tensor_dim(); }
 
@@ -102,4 +102,5 @@ struct FMMMat {
 };
 
 template <size_t dim>
-FMMMat<dim> fmmmmmmm(const Octree<3>& obs_tree, const Octree<3>& src_tree, const FMMConfig<3>& cfg);
+FMMMat<dim> fmmmmmmm(const Octree<dim>& obs_tree, const Octree<dim>& src_tree,
+    const FMMConfig<dim>& cfg);

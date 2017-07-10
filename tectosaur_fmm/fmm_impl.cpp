@@ -91,27 +91,27 @@ std::vector<double> qr_pseudoinverse(double* matrix, int n) {
 }
 
 template <size_t dim>
-void p2p(FMMMat<dim>& mat, const OctreeNode<3>& obs_n, const OctreeNode<3>& src_n) {
+void p2p(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<dim>& src_n) {
     mat.p2p.insert(obs_n, src_n);
 }
 
 template <size_t dim>
-void m2p(FMMMat<dim>& mat, const OctreeNode<3>& obs_n, const OctreeNode<3>& src_n) {
+void m2p(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<dim>& src_n) {
     mat.m2p.insert(obs_n, src_n);
 }
 
 template <size_t dim>
-void p2m(FMMMat<dim>& mat, const OctreeNode<3>& src_n) {
+void p2m(FMMMat<dim>& mat, const OctreeNode<dim>& src_n) {
     mat.p2m.insert(src_n, src_n);
 }
 
 template <size_t dim>
-void m2m(FMMMat<dim>& mat, const OctreeNode<3>& parent_n, const OctreeNode<3>& child_n) {
+void m2m(FMMMat<dim>& mat, const OctreeNode<dim>& parent_n, const OctreeNode<dim>& child_n) {
     mat.m2m[parent_n.height].insert(parent_n, child_n);
 }
 
 template <size_t dim>
-void traverse(FMMMat<dim>& mat, const OctreeNode<3>& obs_n, const OctreeNode<3>& src_n) {
+void traverse(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<dim>& src_n) {
     auto r_src = src_n.bounds.R();
     auto r_obs = obs_n.bounds.R();
     auto sep = hypot(sub(obs_n.bounds.center, src_n.bounds.center));
@@ -142,11 +142,11 @@ void traverse(FMMMat<dim>& mat, const OctreeNode<3>& obs_n, const OctreeNode<3>&
 
     bool split_src = ((r_obs < r_src) && !src_n.is_leaf) || obs_n.is_leaf;
     if (split_src) {
-        for (int i = 0; i < 8; i++) {
+        for (size_t i = 0; i < OctreeNode<dim>::split; i++) {
             traverse(mat, obs_n, mat.src_tree.nodes[src_n.children[i]]);
         }
     } else {
-        for (int i = 0; i < 8; i++) {
+        for (size_t i = 0; i < OctreeNode<dim>::split; i++) {
             traverse(mat, mat.obs_tree.nodes[obs_n.children[i]], src_n);
         }
     }
@@ -174,7 +174,7 @@ void traverse(FMMMat<dim>& mat, const OctreeNode<3>& obs_n, const OctreeNode<3>&
 // U2M and D2L matrices should be separated by level like M2M and L2L.
 // <-- (later note) I did this.
 template <size_t dim>
-void c2e(FMMMat<dim>& mat, BlockSparseMat& sub_mat, const OctreeNode<3>& node,
+void c2e(FMMMat<dim>& mat, BlockSparseMat& sub_mat, const OctreeNode<dim>& node,
          double check_r, double equiv_r) {
     auto equiv_surf = mat.get_surf(node, equiv_r);
     auto check_surf = mat.get_surf(node, check_r);
@@ -212,12 +212,12 @@ void c2e(FMMMat<dim>& mat, BlockSparseMat& sub_mat, const OctreeNode<3>& node,
 }
 
 template <size_t dim>
-void up_collect(FMMMat<dim>& mat, const OctreeNode<3>& src_n) {
+void up_collect(FMMMat<dim>& mat, const OctreeNode<dim>& src_n) {
     c2e(mat, mat.uc2e[src_n.height], src_n, mat.cfg.outer_r, mat.cfg.inner_r);
     if (src_n.is_leaf) {
         p2m(mat, src_n);
     } else {
-        for (int i = 0; i < 8; i++) {
+        for (size_t i = 0; i < OctreeNode<dim>::split; i++) {
             auto child = mat.src_tree.nodes[src_n.children[i]];
             up_collect(mat, child);
             m2m(mat, src_n, child);
@@ -226,8 +226,8 @@ void up_collect(FMMMat<dim>& mat, const OctreeNode<3>& src_n) {
 }
 
 template <size_t dim>
-FMMMat<dim>::FMMMat(Octree<3> obs_tree, Octree<3> src_tree, FMMConfig<3> cfg,
-        std::vector<std::array<double,3>> surf):
+FMMMat<dim>::FMMMat(Octree<dim> obs_tree, Octree<dim> src_tree, FMMConfig<dim> cfg,
+        std::vector<std::array<double,dim>> surf):
     obs_tree(obs_tree),
     src_tree(src_tree),
     cfg(cfg),
@@ -235,10 +235,11 @@ FMMMat<dim>::FMMMat(Octree<3> obs_tree, Octree<3> src_tree, FMMConfig<3> cfg,
     translation_surface_order(surf.size())
 {}
 
-void interact_pts(const FMMConfig<3>& cfg, double* out, double* in,
-    const std::array<double,3>* obs_pts, const std::array<double,3>* obs_ns,
+template <size_t dim>
+void interact_pts(const FMMConfig<dim>& cfg, double* out, double* in,
+    const std::array<double,dim>* obs_pts, const std::array<double,dim>* obs_ns,
     size_t n_obs, size_t obs_pt_start,
-    const std::array<double,3>* src_pts, const std::array<double,3>* src_ns,
+    const std::array<double,dim>* src_pts, const std::array<double,dim>* src_ns,
     size_t n_src, size_t src_pt_start) 
 {
     if (n_obs == 0 || n_src == 0) {
@@ -248,13 +249,13 @@ void interact_pts(const FMMConfig<3>& cfg, double* out, double* in,
     double* out_val_start = &out[cfg.tensor_dim() * obs_pt_start];
     double* in_val_start = &in[cfg.tensor_dim() * src_pt_start];
     cfg.kernel.f_mf(
-        NBodyProblem<3>{obs_pts, obs_ns, src_pts, src_ns, n_obs, n_src, cfg.params.data()},
+        NBodyProblem<dim>{obs_pts, obs_ns, src_pts, src_ns, n_obs, n_src, cfg.params.data()},
         out_val_start, in_val_start
     );
 }
 
 template <size_t dim>
-std::vector<std::array<double,3>> FMMMat<dim>::get_surf(const OctreeNode<3>& src_n, double r) {
+std::vector<std::array<double,dim>> FMMMat<dim>::get_surf(const OctreeNode<dim>& src_n, double r) {
     return inscribe_surf(src_n.bounds, r, surf);
 }
 
@@ -368,30 +369,24 @@ std::vector<double> FMMMat<dim>::m2p_eval(double* multipoles) {
 }
 
 template <size_t dim>
-FMMMat<dim> fmmmmmmm(const Octree<3>& obs_tree, const Octree<3>& src_tree,
-                const FMMConfig<3>& cfg) {
+FMMMat<dim> fmmmmmmm(const Octree<dim>& obs_tree, const Octree<dim>& src_tree,
+                const FMMConfig<dim>& cfg) {
 
-    auto translation_surf = surrounding_surface_sphere<3>(cfg.order);
+    auto translation_surf = surrounding_surface_sphere<dim>(cfg.order);
 
     FMMMat<dim> mat(obs_tree, src_tree, cfg, translation_surf);
 
     mat.m2m.resize(mat.src_tree.max_height + 1);
     mat.uc2e.resize(mat.src_tree.max_height + 1);
 
-#pragma omp parallel
-#pragma omp single nowait
-    {
-#pragma omp task
-        up_collect(mat, mat.src_tree.root());
-#pragma omp task
-        traverse(mat, mat.obs_tree.root(), mat.src_tree.root());
-    }
+    up_collect(mat, mat.src_tree.root());
+    traverse(mat, mat.obs_tree.root(), mat.src_tree.root());
 
     return mat;
 }
 
 template 
-FMMMat<2> fmmmmmmm(const Octree<3>& obs_tree, const Octree<3>& src_tree, const FMMConfig<3>& cfg);
+FMMMat<2> fmmmmmmm(const Octree<2>& obs_tree, const Octree<2>& src_tree, const FMMConfig<2>& cfg);
 template 
 FMMMat<3> fmmmmmmm(const Octree<3>& obs_tree, const Octree<3>& src_tree, const FMMConfig<3>& cfg);
 template struct FMMMat<2>;

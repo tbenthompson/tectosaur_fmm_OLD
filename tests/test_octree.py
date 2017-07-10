@@ -1,14 +1,6 @@
 import numpy as np
-import pytest
-import tectosaur_fmm.fmm_wrapper as fmm
-
-@pytest.fixture(params = [2, 3])
-def dim(request):
-    return request.param
-
-module = dict()
-module[2] = fmm.two
-module[3] = fmm.three
+from dimension import dim, module
+from tectosaur.util.test_decorators import slow
 
 def test_bisects(dim):
     pts = np.random.rand(100,dim)
@@ -64,3 +56,14 @@ def test_idx(dim):
     t = module[dim].Octree(pts, pts, 1)
     for i, n in enumerate(t.nodes):
         assert(n.idx == i)
+
+@slow
+def test_law_of_large_numbers():
+    n = 100000
+    pts = np.random.rand(n, 3)
+    t = module[3].Octree(pts, pts, 100);
+    for i in range(8):
+        child = t.nodes[t.root().children[i]]
+        n_pts = child.end - child.start
+        diff = np.abs(n_pts - (n / 8));
+        assert(diff < (n / 16));

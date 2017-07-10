@@ -30,20 +30,26 @@ void mf_direct_nbody(const NBodyProblem<dim>& p, KernelReal* out, KernelReal* in
     }
 }
 
-KernelReal one_K(const std::array<double,3>&, const std::array<double,3>&, const std::array<double,3>&, const std::array<double,3>&) {
+template <size_t dim>
+KernelReal one_K(const std::array<double,dim>&, const std::array<double,dim>&,
+        const std::array<double,dim>&, const std::array<double,dim>&) 
+{
     return 1.0; 
 }
 
-void one(const NBodyProblem<3>& p, KernelReal* out) {
-    direct_nbody<3>(p, out, one_K);
+template <size_t dim>
+void one(const NBodyProblem<dim>& p, KernelReal* out) {
+    direct_nbody<dim>(p, out, one_K<dim>);
 }
 
-void mf_one(const NBodyProblem<3>& p, KernelReal* out, KernelReal* in) {
-    mf_direct_nbody<3>(p, out, in, one_K);
+template <size_t dim>
+void mf_one(const NBodyProblem<dim>& p, KernelReal* out, KernelReal* in) {
+    mf_direct_nbody<dim>(p, out, in, one_K<dim>);
 }
 
-KernelReal invr_K(const std::array<double,3>& obs, const std::array<double,3>& nobs,
-        const std::array<double,3>& src, const std::array<double,3>& nsrc) 
+template <size_t dim>
+KernelReal invr_K(const std::array<double,dim>& obs, const std::array<double,dim>& nobs,
+        const std::array<double,dim>& src, const std::array<double,dim>& nsrc) 
 {
     auto r = hypot(sub(obs, src));
     if (r == 0.0) {
@@ -52,12 +58,14 @@ KernelReal invr_K(const std::array<double,3>& obs, const std::array<double,3>& n
     return 1.0 / r;
 }
 
-void invr(const NBodyProblem<3>& p, KernelReal* out) {
-    direct_nbody(p, out, invr_K);
+template <size_t dim>
+void invr(const NBodyProblem<dim>& p, KernelReal* out) {
+    direct_nbody(p, out, invr_K<dim>);
 }
 
-void mf_invr(const NBodyProblem<3>& p, KernelReal* out, KernelReal* in) {
-    mf_direct_nbody(p, out, in, invr_K);
+template <size_t dim>
+void mf_invr(const NBodyProblem<dim>& p, KernelReal* out, KernelReal* in) {
+    mf_direct_nbody(p, out, in, invr_K<dim>);
 }
 
 void tensor_invr(const NBodyProblem<3>& p, KernelReal* out) {
@@ -215,15 +223,20 @@ ${mf_kernel_fnc(k_name)}
 
 template <>
 Kernel<2> get_by_name(std::string name) {
+    if (name == "one") {
+        return {one<2>, mf_one<2>, 1, name};
+    } else if (name == "invr") {
+        return {invr<2>, mf_invr<2>, 1, name};
+    }
     throw std::runtime_error("invalid kernel name");
 }
 
 template <>
 Kernel<3> get_by_name(std::string name) {
     if (name == "one") {
-        return {one, mf_one, 1, name};
+        return {one<3>, mf_one<3>, 1, name};
     } else if (name == "invr") {
-        return {invr, mf_invr, 1, name};
+        return {invr<3>, mf_invr<3>, 1, name};
     } else if (name == "tensor_invr") {
         return {tensor_invr, mf_tensor_invr, 3, name};
     } else if (name == "laplace_double") {

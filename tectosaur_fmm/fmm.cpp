@@ -98,6 +98,40 @@ void wrap_dim(py::module& m) {
         });
 
     m.def("fmmmmmmm", &fmmmmmmm<dim>);
+
+    m.def("direct_eval", [](std::string k_name, NPArrayD obs_pts, NPArrayD obs_ns,
+                            NPArrayD src_pts, NPArrayD src_ns, NPArrayD params) {
+        check_shape<dim>(obs_pts);
+        check_shape<dim>(obs_ns);
+        check_shape<dim>(src_pts);
+        check_shape<dim>(src_ns);
+        auto K = get_by_name<dim>(k_name);
+        std::vector<double> out(K.tensor_dim * K.tensor_dim *
+                                obs_pts.request().shape[0] *
+                                src_pts.request().shape[0]);
+        K.f({as_ptr<std::array<double,dim>>(obs_pts), as_ptr<std::array<double,dim>>(obs_ns),
+           as_ptr<std::array<double,dim>>(src_pts), as_ptr<std::array<double,dim>>(src_ns),
+           obs_pts.request().shape[0], src_pts.request().shape[0],
+           as_ptr<double>(params)},
+          out.data());
+        return array_from_vector(out);
+    });
+
+    m.def("mf_direct_eval", [](std::string k_name, NPArrayD obs_pts, NPArrayD obs_ns,
+                            NPArrayD src_pts, NPArrayD src_ns, NPArrayD params, NPArrayD input) {
+        check_shape<dim>(obs_pts);
+        check_shape<dim>(obs_ns);
+        check_shape<dim>(src_pts);
+        check_shape<dim>(src_ns);
+        auto K = get_by_name<dim>(k_name);
+        std::vector<double> out(K.tensor_dim * obs_pts.request().shape[0]);
+        K.f_mf({as_ptr<std::array<double,dim>>(obs_pts), as_ptr<std::array<double,dim>>(obs_ns),
+           as_ptr<std::array<double,dim>>(src_pts), as_ptr<std::array<double,dim>>(src_ns),
+           obs_pts.request().shape[0], src_pts.request().shape[0],
+           as_ptr<double>(params)},
+          out.data(), as_ptr<double>(input));
+        return array_from_vector(out);
+    });
 }
 
 
@@ -124,39 +158,5 @@ PYBIND11_PLUGIN(fmm) {
         .def_readonly("src_n_end", &MatrixFreeOp::src_n_end)
         .def_readonly("src_n_idx", &MatrixFreeOp::src_n_idx);
 
-
-    m.def("direct_eval", [](std::string k_name, NPArrayD obs_pts, NPArrayD obs_ns,
-                            NPArrayD src_pts, NPArrayD src_ns, NPArrayD params) {
-        check_shape<3>(obs_pts);
-        check_shape<3>(obs_ns);
-        check_shape<3>(src_pts);
-        check_shape<3>(src_ns);
-        auto K = get_by_name<3>(k_name);
-        std::vector<double> out(K.tensor_dim * K.tensor_dim *
-                                obs_pts.request().shape[0] *
-                                src_pts.request().shape[0]);
-        K.f({as_ptr<std::array<double,3>>(obs_pts), as_ptr<std::array<double,3>>(obs_ns),
-           as_ptr<std::array<double,3>>(src_pts), as_ptr<std::array<double,3>>(src_ns),
-           obs_pts.request().shape[0], src_pts.request().shape[0],
-           as_ptr<double>(params)},
-          out.data());
-        return array_from_vector(out);
-    });
-
-    m.def("mf_direct_eval", [](std::string k_name, NPArrayD obs_pts, NPArrayD obs_ns,
-                            NPArrayD src_pts, NPArrayD src_ns, NPArrayD params, NPArrayD input) {
-        check_shape<3>(obs_pts);
-        check_shape<3>(obs_ns);
-        check_shape<3>(src_pts);
-        check_shape<3>(src_ns);
-        auto K = get_by_name<3>(k_name);
-        std::vector<double> out(K.tensor_dim * obs_pts.request().shape[0]);
-        K.f_mf({as_ptr<std::array<double,3>>(obs_pts), as_ptr<std::array<double,3>>(obs_ns),
-           as_ptr<std::array<double,3>>(src_pts), as_ptr<std::array<double,3>>(src_ns),
-           obs_pts.request().shape[0], src_pts.request().shape[0],
-           as_ptr<double>(params)},
-          out.data(), as_ptr<double>(input));
-        return array_from_vector(out);
-    });
     return m.ptr();
 }
