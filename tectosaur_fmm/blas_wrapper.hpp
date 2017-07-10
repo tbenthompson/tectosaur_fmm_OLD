@@ -28,6 +28,8 @@ double condition_number(const SVDPtr& svd);
 std::vector<double> mat_mult(int n_out_rows, int n_out_cols,
     bool transposeA, std::vector<double>& A,
     bool transposeB, std::vector<double>& B);
+void matrix_vector_product(double* matrix, int n_rows, int n_cols,
+    double* vector, double* out);
 std::vector<double> matrix_vector_product(double* matrix, int n_rows,
     int n_cols, double* vector);
 

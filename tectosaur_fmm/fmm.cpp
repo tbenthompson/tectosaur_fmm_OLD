@@ -22,8 +22,13 @@ void wrap_dim(py::module& m) {
     std::string dim_str = std::to_string(dim);
 
     py::class_<Cube<dim>>(m, "Cube")
+        .def(py::init<std::array<double,dim>, double>())
         .def_readonly("center", &Cube<dim>::center)
         .def_readonly("width", &Cube<dim>::width);
+
+    m.def("surrounding_surface", surrounding_surface<dim>);
+    m.def("inscribe_surf", &inscribe_surf<dim>);
+    m.def("c2e_solve", &c2e_solve<dim>);
 
     m.def("in_box", &in_box<dim>);
 

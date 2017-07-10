@@ -69,7 +69,7 @@ def lib_cfg(cfg):
 
 def test_cfg(cfg):
     lib_cfg(cfg)
-    cfg['sources'] += ['test_blas.cpp', 'test_misc.cpp', 'test_octree.cpp']
+    cfg['sources'] += ['test_blas.cpp', 'test_octree.cpp']
     cfg['dependencies'] += ['test_helpers.hpp', 'doctest.h']
     cfg['include_dirs'] += [tectosaur_fmm.source_dir]
     template_kernels(cfg)

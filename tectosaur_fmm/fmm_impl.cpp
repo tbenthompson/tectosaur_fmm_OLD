@@ -7,48 +7,6 @@
 #include "fmm_impl.hpp"
 
 template <size_t dim>
-std::vector<std::array<double,dim>> surrounding_surface_sphere(size_t order);
-
-template <>
-std::vector<std::array<double,2>> surrounding_surface_sphere(size_t order) 
-{
-    std::vector<std::array<double,2>> pts(order);
-
-    for (size_t i = 0; i < order; i++) {
-        double theta = i * 2 * M_PI / static_cast<double>(order);
-        pts[i] = {std::cos(theta), std::sin(theta)};
-    }
-
-    return pts;
-}
-
-template <>
-std::vector<std::array<double,3>> surrounding_surface_sphere(size_t order)
-{
-    std::vector<std::array<double,3>> pts;
-    double a = 4 * M_PI / order;
-    double d = std::sqrt(a);
-    auto M_theta = static_cast<size_t>(std::round(M_PI / d));
-    double d_theta = M_PI / M_theta;
-    double d_phi = a / d_theta;
-    for (size_t m = 0; m < M_theta; m++) {
-        double theta = M_PI * (m + 0.5) / M_theta;
-        auto M_phi = static_cast<size_t>(
-            std::round(2 * M_PI * std::sin(theta) / d_phi)
-        );
-        for (size_t n = 0; n < M_phi; n++) {
-            double phi = 2 * M_PI * n / M_phi;
-            double x = std::sin(theta) * std::cos(phi);
-            double y = std::sin(theta) * std::sin(phi);
-            double z = std::cos(theta);
-            pts.push_back({x, y, z});
-        }
-    }
-
-    return pts;
-}
-
-template <size_t dim>
 void p2p(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<dim>& src_n) {
     mat.p2p.insert(obs_n, src_n);
 }
@@ -68,8 +26,10 @@ void m2m(FMMMat<dim>& mat, const OctreeNode<dim>& parent_n, const OctreeNode<dim
     mat.m2m[parent_n.height].insert(parent_n, child_n);
 }
 
+int traverse_touches = 0;
 template <size_t dim>
 void traverse(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<dim>& src_n) {
+    traverse_touches++;
     auto r_src = src_n.bounds.R();
     auto r_obs = obs_n.bounds.R();
     auto sep = hypot(sub(obs_n.bounds.center, src_n.bounds.center));
@@ -110,68 +70,27 @@ void traverse(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<d
     }
 }
 
-// invert equiv to check operator
-// In some cases, the equivalent surface to check surface operator
-// is poorly conditioned. In this case, truncate the singular values
-// to solve a regularized least squares version of the problem.
-//
-// TODO: There is quite a bit of numerical error incurred by storing this
-// fully inverted and truncated.
-//
-// Can I just store it in factored form? Increases complexity.
-// Without doing this, the error is can't be any lower than ~10^-10. Including
-// this, the error can get down to 10^-15.
-// I don't expect to need anything better than 10^-10. But in single precision,
-// the number may be much lower. In which case, I may need to go to double
-// precision sooner than I'd prefer.
-// So, I see two ways to design this. I can store the check to equiv matrix
-// along with each block that needs it. Or, I can separate the P2M, M2M, M2L,
-// P2L, L2L into two steps each: P2M, M2M, M2L, P2L, L2L and UC2E and DC2E
-// (Up check to equiv and down check to equiv)
-// The latter approach seems better, since less needs to be stored. The
-// U2M and D2L matrices should be separated by level like M2M and L2L.
-// <-- (later note) I did this.
 template <size_t dim>
 void c2e(FMMMat<dim>& mat, BlockSparseMat& sub_mat, const OctreeNode<dim>& node,
          double check_r, double equiv_r) {
-    auto equiv_surf = mat.get_surf(node, equiv_r);
-    auto check_surf = mat.get_surf(node, check_r);
-    auto n_surf = mat.surf.size();
 
-    auto n_rows = n_surf * mat.tensor_dim();
+    auto& pinv = mat.uc2e_ops[node.depth];
 
-    std::vector<double> equiv_to_check(n_rows * n_rows);
-    mat.cfg.kernel.f(
-        {
-            check_surf.data(), mat.surf.data(), 
-            equiv_surf.data(), mat.surf.data(),
-            n_surf, n_surf,
-            mat.cfg.params.data()
-        },
-        equiv_to_check.data());
-
-    // TODO: Currently, svd decomposition is the most time consuming part of
-    // assembly. How to optimize this?
-    // 1) Batch a bunch of SVDs to the gpu.
-    // 2) Figure out a way to do less of them. Prune tree nodes?
-    //   May get about 25-50% faster.
-    // 3) A faster alternative? QR? <--- This seems like the first step.
-    // 4) BEST OPTIONBEST OPTIONBEST OPTIONBEST OPTIONBEST OPTION: Regular octree
-    // so that the number of stored c2e operators can be small.
-    // auto svd = svd_decompose(equiv_to_check.data(), n_rows);
-    // const double truncation_threshold = 1e-15;
-    // set_threshold(svd, truncation_threshold);
-    // auto pinv = svd_pseudoinverse(svd);
-    auto pinv = qr_pseudoinverse(equiv_to_check.data(), n_rows);
-
-    sub_mat.blocks.push_back({node.idx * n_rows, node.idx * n_rows, int(n_rows),
-                          int(n_rows), sub_mat.vals.size()});
+    mat.uc2e[node.height].insert(node, node);
+    auto n_rows = mat.surf.size() * mat.cfg.tensor_dim();
+    sub_mat.blocks.push_back({
+        node.idx * n_rows, node.idx * n_rows,
+        int(n_rows), int(n_rows),
+        sub_mat.vals.size()
+    });
     sub_mat.vals.insert(sub_mat.vals.end(), pinv.begin(), pinv.end());
 }
 
+int up_collect_touches = 0;
 template <size_t dim>
 void up_collect(FMMMat<dim>& mat, const OctreeNode<dim>& src_n) {
-    c2e(mat, mat.uc2e[src_n.height], src_n, mat.cfg.outer_r, mat.cfg.inner_r);
+    up_collect_touches++;
+    c2e(mat, mat.uc2e_old[src_n.height], src_n, mat.cfg.outer_r, mat.cfg.inner_r);
     if (src_n.is_leaf) {
         p2m(mat, src_n);
     } else {
@@ -212,10 +131,6 @@ void interact_pts(const FMMConfig<dim>& cfg, double* out, double* in,
     );
 }
 
-template <size_t dim>
-std::vector<std::array<double,dim>> FMMMat<dim>::get_surf(const OctreeNode<dim>& src_n, double r) {
-    return inscribe_surf(src_n.bounds, r, surf);
-}
 
 template <size_t dim>
 void FMMMat<dim>::p2p_matvec(double* out, double* in) {
@@ -236,7 +151,7 @@ template <size_t dim>
 void FMMMat<dim>::p2m_matvec(double* out, double *in) {
     for (size_t i = 0; i < p2m.obs_n_idx.size(); i++) {
         auto src_n = src_tree.nodes[p2m.src_n_idx[i]];
-        auto check = get_surf(src_n, cfg.outer_r);
+        auto check = inscribe_surf(src_n.bounds, cfg.outer_r, surf);
         interact_pts(
             cfg, out, in,
             check.data(), surf.data(), 
@@ -252,8 +167,8 @@ void FMMMat<dim>::m2m_matvec(double* out, double *in, int level) {
     for (size_t i = 0; i < m2m[level].obs_n_idx.size(); i++) {
         auto parent_n = src_tree.nodes[m2m[level].obs_n_idx[i]];
         auto child_n = src_tree.nodes[m2m[level].src_n_idx[i]];
-        auto check = get_surf(parent_n, cfg.outer_r);
-        auto equiv = get_surf(child_n, cfg.inner_r);
+        auto check = inscribe_surf(parent_n.bounds, cfg.outer_r, surf);
+        auto equiv = inscribe_surf(child_n.bounds, cfg.inner_r, surf);
         interact_pts(
             cfg, out, in,
             check.data(), surf.data(), 
@@ -270,13 +185,27 @@ void FMMMat<dim>::m2p_matvec(double* out, double* in) {
         auto obs_n = obs_tree.nodes[m2p.obs_n_idx[i]];
         auto src_n = src_tree.nodes[m2p.src_n_idx[i]];
 
-        auto equiv = get_surf(src_n, cfg.inner_r);
+        auto equiv = inscribe_surf(src_n.bounds, cfg.inner_r, surf);
         interact_pts(
             cfg, out, in,
             &obs_tree.pts[obs_n.start], &obs_tree.normals[obs_n.start],
             obs_n.end - obs_n.start, obs_n.start,
             equiv.data(), surf.data(),
             surf.size(), src_n.idx * surf.size()
+        );
+    }
+}
+
+template <size_t dim>
+void FMMMat<dim>::uc2e_matvec(double* out, double* in, int level) {
+    auto& op = uc2e_ops[level];
+    int n_rows = cfg.tensor_dim() * surf.size();
+    for (size_t i = 0; i < uc2e[level].src_n_idx.size(); i++) {
+        auto node_idx = m2p.src_n_idx[i];
+        matrix_vector_product(
+            op.data(), n_rows, n_rows, 
+            &in[node_idx * n_rows],
+            &out[node_idx * n_rows]
         );
     }
 }
@@ -307,12 +236,15 @@ std::vector<double> FMMMat<dim>::p2m_eval(double* in) {
     std::vector<double> m_check(n_multipoles, 0.0);
     p2m_matvec(m_check.data(), in);
 
-    auto multipoles = uc2e[0].matvec(m_check.data(), n_multipoles);
+    // std::vector<double> multipoles(n_multipoles, 0.0);
+    auto multipoles = uc2e_old[0].matvec(m_check.data(), n_multipoles);
+    // uc2e_matvec(multipoles.data(), m_check.data(), 0);
 
     for (size_t i = 1; i < m2m.size(); i++) {
         zero_vec(m_check);
         m2m_matvec(m_check.data(), multipoles.data(), i);
-        auto add_to_multipoles = uc2e[i].matvec(m_check.data(), n_multipoles);
+        /* uc2e_matvec(multipoles.data(), m_check.data(), i); */
+        auto add_to_multipoles = uc2e_old[i].matvec(m_check.data(), n_multipoles);
         inplace_add_vecs(multipoles, add_to_multipoles);
     }
     return multipoles;
@@ -327,18 +259,38 @@ std::vector<double> FMMMat<dim>::m2p_eval(double* multipoles) {
 }
 
 template <size_t dim>
+void build_uc2e(FMMMat<dim>& mat) {
+    mat.uc2e_ops.resize(mat.src_tree.max_height + 1);
+#pragma omp parallel for
+    for (int i = 0; i < mat.src_tree.max_height + 1; i++) {
+        double width = mat.src_tree.root().bounds.width / std::pow(2.0, static_cast<double>(i));
+        std::array<double,dim> center{};
+        Cube<dim> bounds(center, width);
+        auto pinv = c2e_solve(mat.surf, bounds, mat.cfg.outer_r, mat.cfg.inner_r, mat.cfg);
+        mat.uc2e_ops[i] = pinv;
+    }
+}
+
+template <size_t dim>
 FMMMat<dim> fmmmmmmm(const Octree<dim>& obs_tree, const Octree<dim>& src_tree,
                 const FMMConfig<dim>& cfg) {
 
-    auto translation_surf = surrounding_surface_sphere<dim>(cfg.order);
+    auto translation_surf = surrounding_surface<dim>(cfg.order);
 
     FMMMat<dim> mat(obs_tree, src_tree, cfg, translation_surf);
 
     mat.m2m.resize(mat.src_tree.max_height + 1);
     mat.uc2e.resize(mat.src_tree.max_height + 1);
+    mat.uc2e_old.resize(mat.src_tree.max_height + 1);
 
+    Timer t;
+    build_uc2e(mat);
+    t.report("build_uc2e");
     up_collect(mat, mat.src_tree.root());
+    t.report("up_collect");
     traverse(mat, mat.obs_tree.root(), mat.src_tree.root());
+    t.report("traverse");
+    std::cout << traverse_touches << " " << up_collect_touches << std::endl;
 
     return mat;
 }

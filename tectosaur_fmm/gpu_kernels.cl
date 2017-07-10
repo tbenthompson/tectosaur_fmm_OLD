@@ -103,7 +103,7 @@ __kernel
 void m2p_kernel_${K.name}(__global Real* out, __global Real* in,
         int n_blocks, __global int* obs_n_start, __global int* obs_n_end,
         __global int* src_n_idx, int multipoles_per_cell, __global Real* surf,
-        __global Real* src_n_center, __global Real* src_n_radius, Real inner_r,
+        __global Real* src_n_center, __global Real* src_n_width, Real inner_r,
         __global Real* obs_pts, __global Real* obs_ns, __global Real* params)
 {
     const int block_idx = get_global_id(0);
@@ -112,7 +112,7 @@ void m2p_kernel_${K.name}(__global Real* out, __global Real* in,
 
     int src_idx = src_n_idx[block_idx];
 
-    Real surf_radius = src_n_radius[src_idx] * inner_r;
+    Real surf_radius = src_n_width[src_idx] * inner_r * sqrt(3.0);
     % for d in range(3):
     Real center${dn(d)} = src_n_center[src_idx * 3 + ${d}];
     % endfor

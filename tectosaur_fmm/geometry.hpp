@@ -35,6 +35,8 @@ struct Cube {
     std::array<double,dim> center;
     double width;
 
+    Cube(std::array<double,dim> center, double width): center(center), width(width) {}
+
     double R() const {
         return width * std::sqrt(static_cast<double>(dim));
     }

@@ -6,18 +6,7 @@
 #include "fmm_kernels.hpp"
 #include "octree.hpp"
 #include "blas_wrapper.hpp"
-
-template <size_t dim>
-std::vector<std::array<double,dim>> inscribe_surf(const Cube<dim>& b, double scaling,
-                                const std::vector<std::array<double,dim>>& fmm_surf) {
-    std::vector<std::array<double,dim>> out(fmm_surf.size());
-    for (size_t i = 0; i < fmm_surf.size(); i++) {
-        for (size_t d = 0; d < dim; d++) {
-            out[i][d] = fmm_surf[i][d] * b.R() * scaling + b.center[d];
-        }
-    }
-    return out;
-}
+#include "translation_surf.hpp"
 
 template <size_t dim>
 struct FMMConfig {
@@ -34,6 +23,31 @@ struct FMMConfig {
     std::string kernel_name() const { return kernel.name; }
     int tensor_dim() const { return kernel.tensor_dim; }
 };
+
+template <size_t dim>
+std::vector<double> c2e_solve(std::vector<std::array<double,dim>> surf,
+    const Cube<dim>& bounds, double check_r, double equiv_r, const FMMConfig<dim>& cfg) 
+{
+    auto equiv_surf = inscribe_surf(bounds, equiv_r, surf);
+    auto check_surf = inscribe_surf(bounds, check_r, surf);
+
+    auto n_surf = surf.size();
+    auto n_rows = n_surf * cfg.tensor_dim();
+
+    std::vector<double> equiv_to_check(n_rows * n_rows);
+    cfg.kernel.f(
+        {
+            check_surf.data(), surf.data(), 
+            equiv_surf.data(), surf.data(),
+            n_surf, n_surf,
+            cfg.params.data()
+        },
+        equiv_to_check.data());
+
+    auto pinv = qr_pseudoinverse(equiv_to_check.data(), n_rows);
+
+    return pinv;
+}
 
 struct MatrixFreeOp {
     std::vector<int> obs_n_start;
@@ -67,19 +81,20 @@ struct FMMMat {
     MatrixFreeOp m2p;
     std::vector<MatrixFreeOp> m2m;
 
-    std::vector<BlockSparseMat> uc2e;
+    std::vector<std::vector<double>> uc2e_ops;
+    std::vector<MatrixFreeOp> uc2e;
+    std::vector<BlockSparseMat> uc2e_old;
 
     FMMMat(Octree<dim> obs_tree, Octree<dim> src_tree, FMMConfig<dim> cfg,
         std::vector<std::array<double,dim>> surf);
 
-    std::vector<std::array<double,dim>> get_surf(const OctreeNode<dim>& src_n, double r);
-    
     int tensor_dim() const { return cfg.tensor_dim(); }
 
     void p2m_matvec(double* out, double* in);
     void m2m_matvec(double* out, double* in, int level);
     void p2p_matvec(double* out, double* in);
     void m2p_matvec(double* out, double* in);
+    void uc2e_matvec(double* out, double* in, int level);
 
     std::vector<double> p2p_eval(double* in);
     std::vector<double> p2m_eval(double* in);

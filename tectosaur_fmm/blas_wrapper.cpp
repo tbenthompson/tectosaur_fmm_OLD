@@ -168,21 +168,27 @@ double condition_number(const SVDPtr& svd)
     return first / last;
 }
 
-std::vector<double> matrix_vector_product(double* matrix, int n_rows,
-    int n_cols, double* vector)
+void matrix_vector_product(double* matrix, int n_rows, int n_cols,
+    double* vector, double* out) 
 {
     if (n_cols == 0) {
-        return {};
+        return;
     }
     char TRANS = 'T';
     double alpha = 1;
     double beta = 0;
     int inc = 1;
-    std::vector<double> out(n_rows);
     //IMPORTANT that n_cols and n_rows are switched because the 3bem internal
     //matrix is in row-major order and BLAS expects column major
     dgemv_(&TRANS, &n_cols, &n_rows, &alpha, matrix,
-        &n_cols, vector, &inc, &beta, out.data(), &inc);
+        &n_cols, vector, &inc, &beta, out, &inc);
+}
+
+std::vector<double> matrix_vector_product(double* matrix, int n_rows,
+    int n_cols, double* vector)
+{
+    std::vector<double> out(n_rows);
+    matrix_vector_product(matrix, n_rows, n_cols, vector, out.data());
     return out;
 }
 

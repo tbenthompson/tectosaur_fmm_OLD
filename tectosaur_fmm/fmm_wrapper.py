@@ -71,7 +71,9 @@ def data_to_gpu_m2p(fmm_mat, multipoles, gd):
         np.array([n.bounds.center for n in fmm_mat.src_tree.nodes]).flatten(),
         float_type
     )
-    gd['src_n_radius'] = gpu.to_gpu(np.array([n.bounds.r for n in fmm_mat.src_tree.nodes]), float_type)
+    gd['src_n_width'] = gpu.to_gpu(np.array(
+        [n.bounds.width for n in fmm_mat.src_tree.nodes]
+    ), float_type)
     gd['multipoles'] = gpu.to_gpu(multipoles, float_type)
 
 def gpu_p2p(fmm_mat, gd):
@@ -96,16 +98,16 @@ def gpu_m2p(fmm_mat, gd):
             gd['out'].data, gd['multipoles'].data,
             np.int32(n_m2p), gd['m2p_obs_n_start'].data, gd['m2p_obs_n_end'].data,
             gd['m2p_src_n_idx'].data, np.int32(gd['surf'].shape[0]), gd['surf'].data,
-            gd['src_n_center'].data, gd['src_n_radius'].data, float_type(fmm_mat.cfg.inner_r),
+            gd['src_n_center'].data, gd['src_n_width'].data, float_type(fmm_mat.cfg.inner_r),
             gd['obs_pts'].data, gd['obs_normals'].data,
             gd['params'].data
         )
 
 def eval_ocl(fmm_mat, input_vals):
-    report_p2p_vs_m2p(fmm_mat)
     t = Timer()
 
     gpu_data = data_to_gpu_p2p(fmm_mat, input_vals)
+    t.report('data to gpu p2p')
     gpu_p2p(fmm_mat, gpu_data)
     t.report('launch p2p')
 
@@ -113,6 +115,7 @@ def eval_ocl(fmm_mat, input_vals):
     t.report('p2m')
 
     data_to_gpu_m2p(fmm_mat, multipoles, gpu_data)
+    t.report('data to gpu m2p')
     gpu_m2p(fmm_mat, gpu_data)
     retval = gpu_data['out'].get()
     t.report("m2p")

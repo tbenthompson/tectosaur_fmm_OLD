@@ -1,7 +1,3 @@
-do the QR decompositions for the C2E operator by using viennacl!!!!
-prune the C2E operator construction based on which ones are actually used.
-use the uniformity of the octree to limit the number of kernels.
-
 move fmm_integral_op into this package
 
 use FMM for okada -- just try it out first, make sure its accurate.
