@@ -11,7 +11,6 @@ lib_cfg(cfg)
 
 #include "fmm_impl.hpp"
 #include "octree.hpp"
-#include "kdtree.hpp"
 
 namespace py = pybind11;
 
@@ -65,37 +64,6 @@ PYBIND11_PLUGIN(fmm) {
 
     wrap_octree<2>(two);
     wrap_octree<3>(three);
-
-    py::class_<Sphere>(m, "Sphere")
-        .def_readonly("r", &Sphere::r)
-        .def_readonly("center", &Sphere::center);
-
-    py::class_<KDNode>(m, "KDNode")
-        .def_readonly("start", &KDNode::start)
-        .def_readonly("end", &KDNode::end)
-        .def_readonly("bounds", &KDNode::bounds)
-        .def_readonly("is_leaf", &KDNode::is_leaf)
-        .def_readonly("idx", &KDNode::idx)
-        .def_readonly("height", &KDNode::height)
-        .def_readonly("depth", &KDNode::depth)
-        .def_readonly("children", &KDNode::children);
-
-    py::class_<KDTree>(m, "KDTree")
-        .def("__init__", 
-        [] (KDTree& kd, NPArrayD np_pts, NPArrayD np_normals, size_t n_per_cell) {
-            check_shape<3>(np_pts);
-            check_shape<3>(np_normals);
-            new (&kd) KDTree(
-                reinterpret_cast<Vec3*>(np_pts.request().ptr),
-                reinterpret_cast<Vec3*>(np_normals.request().ptr),
-                np_pts.request().shape[0], n_per_cell
-            );
-        })
-        .def_readonly("nodes", &KDTree::nodes)
-        .def_readonly("pts", &KDTree::pts)
-        .def_readonly("normals", &KDTree::normals)
-        .def_readonly("orig_idxs", &KDTree::orig_idxs)
-        .def_readonly("max_height", &KDTree::max_height);
 
     py::class_<BlockSparseMat>(m, "BlockSparseMat")
         .def("get_nnz", &BlockSparseMat::get_nnz)
@@ -166,8 +134,8 @@ PYBIND11_PLUGIN(fmm) {
         std::vector<double> out(K.tensor_dim * K.tensor_dim *
                                 obs_pts.request().shape[0] *
                                 src_pts.request().shape[0]);
-        K.f({as_ptr<Vec3>(obs_pts), as_ptr<Vec3>(obs_ns),
-           as_ptr<Vec3>(src_pts), as_ptr<Vec3>(src_ns),
+        K.f({as_ptr<std::array<double,3>>(obs_pts), as_ptr<std::array<double,3>>(obs_ns),
+           as_ptr<std::array<double,3>>(src_pts), as_ptr<std::array<double,3>>(src_ns),
            obs_pts.request().shape[0], src_pts.request().shape[0],
            as_ptr<double>(params)},
           out.data());
@@ -182,8 +150,8 @@ PYBIND11_PLUGIN(fmm) {
         check_shape<3>(src_ns);
         auto K = get_by_name(k_name);
         std::vector<double> out(K.tensor_dim * obs_pts.request().shape[0]);
-        K.f_mf({as_ptr<Vec3>(obs_pts), as_ptr<Vec3>(obs_ns),
-           as_ptr<Vec3>(src_pts), as_ptr<Vec3>(src_ns),
+        K.f_mf({as_ptr<std::array<double,3>>(obs_pts), as_ptr<std::array<double,3>>(obs_ns),
+           as_ptr<std::array<double,3>>(src_pts), as_ptr<std::array<double,3>>(src_ns),
            obs_pts.request().shape[0], src_pts.request().shape[0],
            as_ptr<double>(params)},
           out.data(), as_ptr<double>(input));

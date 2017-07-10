@@ -53,10 +53,10 @@ def lib_cfg(cfg):
     setup_pybind11(cfg)
     cfg['compiler_args'] += ['-std=c++14', '-O3', '-g', '-Wall', '-Werror', '-fopenmp']
     cfg['sources'] += to_fmm_dir([
-        'fmm_impl.cpp', 'kdtree.cpp', 'blas_wrapper.cpp', 'fmm_kernels.cpp'
+        'fmm_impl.cpp', 'blas_wrapper.cpp', 'fmm_kernels.cpp'
     ])
     cfg['dependencies'] += to_fmm_dir([
-        'fmm_impl.hpp', 'octree.hpp', 'kdtree.hpp', 'blas_wrapper.hpp',
+        'fmm_impl.hpp', 'octree.hpp', 'blas_wrapper.hpp',
         os.path.join(tectosaur.source_dir, 'include', 'pybind11_nparray.hpp'),
         'cfg.py'
     ])

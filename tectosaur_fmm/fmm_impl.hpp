@@ -6,7 +6,17 @@
 #include "fmm_kernels.hpp"
 #include "octree.hpp"
 
-std::vector<Vec3> inscribe_surf(const Sphere& b, double scaling, const std::vector<Vec3>& fmm_surf);
+template <size_t dim>
+std::vector<std::array<double,dim>> inscribe_surf(const Cube<dim>& b, double scaling,
+                                const std::vector<std::array<double,dim>>& fmm_surf) {
+    std::vector<std::array<double,dim>> out(fmm_surf.size());
+    for (size_t i = 0; i < fmm_surf.size(); i++) {
+        for (size_t d = 0; d < dim; d++) {
+            out[i][d] = fmm_surf[i][d] * b.R() * scaling + b.center[d];
+        }
+    }
+    return out;
+}
 
 struct FMMConfig {
     // The MAC needs to < (1.0 / (check_r - 1)) so that farfield
@@ -54,13 +64,13 @@ struct FMMMat {
     Octree<3> obs_tree;
     Octree<3> src_tree;
     FMMConfig cfg;
-    std::vector<Vec3> surf;
+    std::vector<std::array<double,3>> surf;
     int translation_surface_order;
 
     FMMMat(Octree<3> obs_tree, Octree<3> src_tree, FMMConfig cfg,
-        std::vector<Vec3> surf);
+        std::vector<std::array<double,3>> surf);
 
-    std::vector<Vec3> get_surf(const OctreeNode<3>& src_n, double r);
+    std::vector<std::array<double,3>> get_surf(const OctreeNode<3>& src_n, double r);
     
     int tensor_dim() const { return cfg.tensor_dim(); }
 

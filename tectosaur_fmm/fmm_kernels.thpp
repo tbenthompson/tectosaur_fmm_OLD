@@ -1,13 +1,12 @@
-#include "kdtree.hpp"
 #include <functional>
 
 #define KernelReal double
 
 struct NBodyProblem {
-    const Vec3* obs_pts;
-    const Vec3* obs_ns;
-    const Vec3* src_pts;
-    const Vec3* src_ns;
+    const std::array<double,3>* obs_pts;
+    const std::array<double,3>* obs_ns;
+    const std::array<double,3>* src_pts;
+    const std::array<double,3>* src_ns;
     size_t n_obs;
     size_t n_src;
     const KernelReal* kernel_args;

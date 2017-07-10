@@ -7,9 +7,9 @@
 #include "fmm_impl.hpp"
 #include "blas_wrapper.hpp"
 
-std::vector<Vec3> inscribe_surf(const Cube<3>& b, double scaling,
-                                const std::vector<Vec3>& fmm_surf) {
-    std::vector<Vec3> out(fmm_surf.size());
+std::vector<std::array<double,3>> inscribe_surf(const Cube<3>& b, double scaling,
+                                const std::vector<std::array<double,3>>& fmm_surf) {
+    std::vector<std::array<double,3>> out(fmm_surf.size());
     for (size_t i = 0; i < fmm_surf.size(); i++) {
         for (size_t d = 0; d < 3; d++) {
             out[i][d] = fmm_surf[i][d] * b.R() * scaling + b.center[d];
@@ -18,9 +18,9 @@ std::vector<Vec3> inscribe_surf(const Cube<3>& b, double scaling,
     return out;
 }
 
-std::vector<Vec3> surrounding_surface_sphere(size_t order)
+std::vector<std::array<double,3>> surrounding_surface_sphere(size_t order)
 {
-    std::vector<Vec3> pts;
+    std::vector<std::array<double,3>> pts;
     double a = 4 * M_PI / order;
     double d = std::sqrt(a);
     auto M_theta = static_cast<size_t>(std::round(M_PI / d));
@@ -221,7 +221,7 @@ void up_collect(FMMMat& mat, const OctreeNode<3>& src_n) {
 }
 
 FMMMat::FMMMat(Octree<3> obs_tree, Octree<3> src_tree, FMMConfig cfg,
-        std::vector<Vec3> surf):
+        std::vector<std::array<double,3>> surf):
     obs_tree(obs_tree),
     src_tree(src_tree),
     cfg(cfg),
@@ -230,8 +230,10 @@ FMMMat::FMMMat(Octree<3> obs_tree, Octree<3> src_tree, FMMConfig cfg,
 {}
 
 void interact_pts(const FMMConfig& cfg, double* out, double* in,
-    const Vec3* obs_pts, const Vec3* obs_ns, size_t n_obs, size_t obs_pt_start,
-    const Vec3* src_pts, const Vec3* src_ns, size_t n_src, size_t src_pt_start) 
+    const std::array<double,3>* obs_pts, const std::array<double,3>* obs_ns,
+    size_t n_obs, size_t obs_pt_start,
+    const std::array<double,3>* src_pts, const std::array<double,3>* src_ns,
+    size_t n_src, size_t src_pt_start) 
 {
     if (n_obs == 0 || n_src == 0) {
         return;
@@ -245,7 +247,7 @@ void interact_pts(const FMMConfig& cfg, double* out, double* in,
     );
 }
 
-std::vector<Vec3> FMMMat::get_surf(const OctreeNode<3>& src_n, double r) {
+std::vector<std::array<double,3>> FMMMat::get_surf(const OctreeNode<3>& src_n, double r) {
     return inscribe_surf(src_n.bounds, r, surf);
 }
 
