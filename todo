@@ -1,6 +1,6 @@
 do the QR decompositions for the C2E operator by using viennacl!!!!
 
-uniform octree to speed up fmm setup and standardize some of the translation kernels.
+use the uniformity of the octree to limit the number of kernels.
 
 move fmm_integral_op into this package
 

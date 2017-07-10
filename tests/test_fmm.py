@@ -37,8 +37,8 @@ def run_full(n, make_pts, mac, order, kernel, params, ocl = False):
     src_ns /= np.linalg.norm(src_ns, axis = 1)[:,np.newaxis]
     t.report('gen random data')
 
-    obs_kd = fmm.KDTree(obs_pts, obs_ns, order)
-    src_kd = fmm.KDTree(src_pts, src_ns, order)
+    obs_kd = fmm.three.Octree(obs_pts, obs_ns, order)
+    src_kd = fmm.three.Octree(src_pts, src_ns, order)
     t.report('build trees')
     fmm_mat = fmm.fmmmmmmm(
         obs_kd, src_kd, fmm.FMMConfig(1.1, mac, order, kernel, params)
@@ -50,6 +50,8 @@ def run_full(n, make_pts, mac, order, kernel, params, ocl = False):
     n_outputs = obs_pts.shape[0] * tdim
 
     if ocl:
+        est = fmm.eval_ocl(fmm_mat, input_vals)
+    else:
         est = fmm.eval_cpu(fmm_mat, input_vals)
     t.report('eval fmm')
     # est2 = fmm.mf_direct_eval(kernel, obs_pts, obs_ns, src_pts, src_ns, params, input_vals)

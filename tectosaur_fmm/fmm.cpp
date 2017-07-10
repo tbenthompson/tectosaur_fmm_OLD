@@ -18,8 +18,53 @@ namespace py = pybind11;
 
 int main(int,char**);
 
+template <size_t dim>
+void wrap_octree(py::module& m) {
+    std::string dim_str = std::to_string(dim);
+
+    py::class_<Cube<dim>>(m, "Cube")
+        .def_readonly("center", &Cube<dim>::center)
+        .def_readonly("width", &Cube<dim>::width);
+
+    m.def("in_box", &in_box<dim>);
+
+    py::class_<OctreeNode<dim>>(m, "OctreeNode")
+        .def_readonly("start", &OctreeNode<dim>::start)
+        .def_readonly("end", &OctreeNode<dim>::end)
+        .def_readonly("bounds", &OctreeNode<dim>::bounds)
+        .def_readonly("is_leaf", &OctreeNode<dim>::is_leaf)
+        .def_readonly("idx", &OctreeNode<dim>::idx)
+        .def_readonly("height", &OctreeNode<dim>::height)
+        .def_readonly("depth", &OctreeNode<dim>::depth)
+        .def_readonly("children", &OctreeNode<dim>::children);
+
+    py::class_<Octree<dim>>(m, "Octree")
+        .def("__init__",
+        [] (Octree<dim>& kd, NPArrayD np_pts, NPArrayD np_normals, size_t n_per_cell) {
+            check_shape<dim>(np_pts);
+            check_shape<dim>(np_normals);
+            new (&kd) Octree<dim>(
+                reinterpret_cast<std::array<double,dim>*>(np_pts.request().ptr),
+                reinterpret_cast<std::array<double,dim>*>(np_normals.request().ptr),
+                np_pts.request().shape[0], n_per_cell
+            );
+        })
+        .def("root", &Octree<dim>::root)
+        .def_readonly("nodes", &Octree<dim>::nodes)
+        .def_readonly("pts", &Octree<dim>::pts)
+        .def_readonly("normals", &Octree<dim>::normals)
+        .def_readonly("orig_idxs", &Octree<dim>::orig_idxs)
+        .def_readonly("max_height", &Octree<dim>::max_height);
+}
+
+
 PYBIND11_PLUGIN(fmm) {
     py::module m("fmm");
+    auto two = m.def_submodule("two");
+    auto three = m.def_submodule("three");
+
+    wrap_octree<2>(two);
+    wrap_octree<3>(three);
 
     py::class_<Sphere>(m, "Sphere")
         .def_readonly("r", &Sphere::r)
@@ -51,18 +96,6 @@ PYBIND11_PLUGIN(fmm) {
         .def_readonly("normals", &KDTree::normals)
         .def_readonly("orig_idxs", &KDTree::orig_idxs)
         .def_readonly("max_height", &KDTree::max_height);
-
-    py::class_<Octree>(m, "Octree");
-        // .def("__init__",
-        // [] (Octree& kd, NPArrayD np_pts, NPArrayD np_normals, size_t n_per_cell) {
-        //     check_shape<3>(np_pts);
-        //     check_shape<3>(np_normals);
-        //     new (&kd) KDTree(
-        //         reinterpret_cast<Vec3*>(np_pts.request().ptr),
-        //         reinterpret_cast<Vec3*>(np_normals.request().ptr),
-        //         np_pts.request().shape[0], n_per_cell
-        //     );
-        // });
 
     py::class_<BlockSparseMat>(m, "BlockSparseMat")
         .def("get_nnz", &BlockSparseMat::get_nnz)

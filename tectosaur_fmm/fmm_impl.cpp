@@ -7,12 +7,12 @@
 #include "fmm_impl.hpp"
 #include "blas_wrapper.hpp"
 
-std::vector<Vec3> inscribe_surf(const Sphere& b, double scaling,
+std::vector<Vec3> inscribe_surf(const Cube<3>& b, double scaling,
                                 const std::vector<Vec3>& fmm_surf) {
     std::vector<Vec3> out(fmm_surf.size());
     for (size_t i = 0; i < fmm_surf.size(); i++) {
         for (size_t d = 0; d < 3; d++) {
-            out[i][d] = fmm_surf[i][d] * b.r * scaling + b.center[d];
+            out[i][d] = fmm_surf[i][d] * b.R() * scaling + b.center[d];
         }
     }
     return out;
@@ -62,7 +62,7 @@ std::vector<double> BlockSparseMat::matvec(double* vec, size_t out_size) {
     return out;
 }
 
-void MatrixFreeOp::insert(const KDNode& obs_n, const KDNode& src_n) {
+void MatrixFreeOp::insert(const OctreeNode<3>& obs_n, const OctreeNode<3>& src_n) {
     obs_n_start.push_back(obs_n.start);
     obs_n_end.push_back(obs_n.end);
     obs_n_idx.push_back(obs_n.idx);
@@ -71,25 +71,25 @@ void MatrixFreeOp::insert(const KDNode& obs_n, const KDNode& src_n) {
     src_n_idx.push_back(src_n.idx);
 }
 
-void p2p(FMMMat& mat, const KDNode& obs_n, const KDNode& src_n) {
+void p2p(FMMMat& mat, const OctreeNode<3>& obs_n, const OctreeNode<3>& src_n) {
     mat.p2p.insert(obs_n, src_n);
 }
 
-void m2p(FMMMat& mat, const KDNode& obs_n, const KDNode& src_n) {
+void m2p(FMMMat& mat, const OctreeNode<3>& obs_n, const OctreeNode<3>& src_n) {
     mat.m2p.insert(obs_n, src_n);
 }
 
-void p2m(FMMMat& mat, const KDNode& src_n) {
+void p2m(FMMMat& mat, const OctreeNode<3>& src_n) {
     mat.p2m.insert(src_n, src_n);
 }
 
-void m2m(FMMMat& mat, const KDNode& parent_n, const KDNode& child_n) {
+void m2m(FMMMat& mat, const OctreeNode<3>& parent_n, const OctreeNode<3>& child_n) {
     mat.m2m[parent_n.height].insert(parent_n, child_n);
 }
 
-void traverse(FMMMat& mat, const KDNode& obs_n, const KDNode& src_n) {
-    auto r_src = src_n.bounds.r;
-    auto r_obs = obs_n.bounds.r;
+void traverse(FMMMat& mat, const OctreeNode<3>& obs_n, const OctreeNode<3>& src_n) {
+    auto r_src = src_n.bounds.R();
+    auto r_obs = obs_n.bounds.R();
     auto sep = hypot(sub(obs_n.bounds.center, src_n.bounds.center));
 
     // If outer_r * r_src + inner_r * r_obs is less than the separation, then
@@ -118,11 +118,11 @@ void traverse(FMMMat& mat, const KDNode& obs_n, const KDNode& src_n) {
 
     bool split_src = ((r_obs < r_src) && !src_n.is_leaf) || obs_n.is_leaf;
     if (split_src) {
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 8; i++) {
             traverse(mat, obs_n, mat.src_tree.nodes[src_n.children[i]]);
         }
     } else {
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 8; i++) {
             traverse(mat, mat.obs_tree.nodes[obs_n.children[i]], src_n);
         }
     }
@@ -170,7 +170,7 @@ std::vector<double> qr_pseudoinverse(double* matrix, int n) {
 // The latter approach seems better, since less needs to be stored. The
 // U2M and D2L matrices should be separated by level like M2M and L2L.
 // <-- (later note) I did this.
-void c2e(FMMMat& mat, BlockSparseMat& sub_mat, const KDNode& node,
+void c2e(FMMMat& mat, BlockSparseMat& sub_mat, const OctreeNode<3>& node,
          double check_r, double equiv_r) {
     auto equiv_surf = mat.get_surf(node, equiv_r);
     auto check_surf = mat.get_surf(node, check_r);
@@ -207,12 +207,12 @@ void c2e(FMMMat& mat, BlockSparseMat& sub_mat, const KDNode& node,
     sub_mat.vals.insert(sub_mat.vals.end(), pinv.begin(), pinv.end());
 }
 
-void up_collect(FMMMat& mat, const KDNode& src_n) {
+void up_collect(FMMMat& mat, const OctreeNode<3>& src_n) {
     c2e(mat, mat.uc2e[src_n.height], src_n, mat.cfg.outer_r, mat.cfg.inner_r);
     if (src_n.is_leaf) {
         p2m(mat, src_n);
     } else {
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 8; i++) {
             auto child = mat.src_tree.nodes[src_n.children[i]];
             up_collect(mat, child);
             m2m(mat, src_n, child);
@@ -220,7 +220,7 @@ void up_collect(FMMMat& mat, const KDNode& src_n) {
     }
 }
 
-FMMMat::FMMMat(KDTree obs_tree, KDTree src_tree, FMMConfig cfg,
+FMMMat::FMMMat(Octree<3> obs_tree, Octree<3> src_tree, FMMConfig cfg,
         std::vector<Vec3> surf):
     obs_tree(obs_tree),
     src_tree(src_tree),
@@ -245,7 +245,7 @@ void interact_pts(const FMMConfig& cfg, double* out, double* in,
     );
 }
 
-std::vector<Vec3> FMMMat::get_surf(const KDNode& src_n, double r) {
+std::vector<Vec3> FMMMat::get_surf(const OctreeNode<3>& src_n, double r) {
     return inscribe_surf(src_n.bounds, r, surf);
 }
 
@@ -351,7 +351,7 @@ std::vector<double> FMMMat::m2p_eval(double* multipoles) {
     return out;
 }
 
-FMMMat fmmmmmmm(const KDTree& obs_tree, const KDTree& src_tree,
+FMMMat fmmmmmmm(const Octree<3>& obs_tree, const Octree<3>& src_tree,
                 const FMMConfig& cfg) {
 
     auto translation_surf = surrounding_surface_sphere(cfg.order);

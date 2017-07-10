@@ -61,8 +61,8 @@ def test_build_big():
     pts = np.random.rand(1000000, 3)
     import time
     start = time.time()
-    kdtree = fmm.KDTree(pts, pts, 1)
-    print("KDTree took: " + str(time.time() - start))
+    octree = fmm.three.Octree(pts, pts, 1)
+    print("octree took: " + str(time.time() - start))
 
 @slow
 def test_high_accuracy():

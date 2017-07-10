@@ -6,12 +6,20 @@
 
 template <size_t dim>
 inline double dot(const std::array<double,dim>& a, const std::array<double,dim>& b) {
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    double out = 0;
+    for (size_t d = 0; d < dim; d++) {
+        out += a[d] * b[d];
+    }
+    return out;
 }
 
 template <size_t dim>
 inline std::array<double,dim> sub(const std::array<double,dim>& a, const std::array<double,dim>& b) {
-    return {a[0] - b[0], a[1] - b[1], a[2] - b[2]};
+    std::array<double,dim> out;
+    for (size_t d = 0; d < dim; d++) {
+        out[d] = a[d] - b[d];
+    }
+    return out;
 }
 
 template <size_t dim>
@@ -20,10 +28,88 @@ inline double hypot(const std::array<double,dim>& v) {
 }
 
 template <size_t dim>
-struct Ball {
+inline double dist(const std::array<double,dim>& a, const std::array<double,dim>& b) {
+    return hypot(sub(a,b));
+}
+
+template <size_t dim>
+struct Cube {
     std::array<double,dim> center;
-    double r;
+    double width;
+
+    double R() const {
+        return width * std::sqrt(3.0);
+    }
 };
+
+template <size_t dim>
+Cube<dim> bounding_box(std::array<double,dim>* pts, size_t n_pts) {
+    std::array<double,dim> center_of_mass{};
+    for (size_t i = 0; i < n_pts; i++) {
+        for (size_t d = 0; d < dim; d++) {
+            center_of_mass[d] += pts[i][d];
+        }
+    }
+    for (size_t d = 0; d < dim; d++) {
+        center_of_mass[d] /= n_pts;
+    }
+
+    double max_width = 0.0;
+    for (size_t i = 0; i < n_pts; i++) {
+        for (size_t d = 0; d < dim; d++) {
+            max_width = std::max(max_width, fabs(pts[i][d] - center_of_mass[d]));
+        }
+    }
+
+    return {center_of_mass, max_width};
+}
+
+template <size_t dim>
+std::array<size_t,dim> make_child_idx(size_t i) 
+{
+    std::array<size_t,dim> child_idx;
+    for (int d = dim - 1; d >= 0; d--) {
+        auto idx = i % 2;
+        i = i >> 1;
+        child_idx[d] = idx;
+    }
+    return child_idx;
+}
+
+template <size_t dim>
+Cube<dim> get_subcell(const Cube<dim>& b, const std::array<size_t,dim>& idx)
+{
+    auto new_width = b.width / 2.0;
+    auto new_center = b.center;
+    for (size_t d = 0; d < dim; d++) {
+        new_center[d] += ((static_cast<double>(idx[d]) * 2) - 1) * new_width;
+    }
+    return {new_center, new_width};
+}
+
+template <size_t dim>
+int find_containing_subcell(const Cube<dim>& b, const std::array<double,dim>& pt) {
+    int child_idx = 0;
+    for (size_t d = 0; d < dim; d++) {
+        if (pt[d] > b.center[d]) {
+            child_idx++; 
+        }
+        if (d < dim - 1) {
+            child_idx = child_idx << 1;
+        }
+    }
+    return child_idx;
+}
+
+template <size_t dim>
+bool in_box(const Cube<dim>& b, const std::array<double,dim>& pt) {
+    for (size_t d = 0; d < dim; d++) {
+        if (fabs(pt[d] - b.center[d]) >= (1.0 + 1e-14) * b.width) {
+            return false;
+        }
+    }
+    return true;
+}
 
 template <size_t dim>
 struct OctreeNode {
@@ -31,7 +117,7 @@ struct OctreeNode {
 
     size_t start;
     size_t end;
-    Ball<dim> bounds;
+    Cube<dim> bounds;
     bool is_leaf;
     int height;
     int depth;
@@ -40,36 +126,45 @@ struct OctreeNode {
 };
 
 template <size_t dim>
-struct PtNormal {
+struct PtNormalREMOVE {
     std::array<double,dim> pt;
     std::array<double,dim> normal;
     size_t orig_idx;
 };
 
 template <size_t dim>
-Ball<dim> node_bounds(PtNormal<dim>* pts, size_t n_pts, double parent_size) {
-    std::array<double,dim> center_of_mass{};
-    for (size_t i = 0; i < n_pts; i++) {
-        for (size_t d = 0; d < dim; d++) {
-            center_of_mass[d] += pts[i].pt[d];
-        }
-    }
-    for (size_t d = 0; d < dim; d++) {
-        center_of_mass[d] /= n_pts;
+std::array<int,OctreeNode<dim>::split+1> octree_partition(
+        const Cube<dim>& bounds, PtNormalREMOVE<dim>* start, PtNormalREMOVE<dim>* end) 
+{
+    std::array<std::vector<PtNormalREMOVE<dim>>,OctreeNode<dim>::split> chunks{};
+    for (auto* entry = start; entry < end; entry++) {
+        chunks[find_containing_subcell(bounds, entry->pt)].push_back(*entry);
     }
 
-    double max_r = 0.0;
-    for (size_t i = 0; i < n_pts; i++) {
-        for (size_t d = 0; d < dim; d++) {
-            max_r = std::max(max_r, hypot(sub(pts[i].pt, center_of_mass)));
+    auto* next = start;
+    std::array<int,OctreeNode<dim>::split+1> splits{};
+    for (size_t subcell_idx = 0; subcell_idx < OctreeNode<dim>::split; subcell_idx++) {
+        size_t subcell_n_pts = chunks[subcell_idx].size();
+        for (size_t i = 0; i < subcell_n_pts; i++) {
+            *next = chunks[subcell_idx][i];
+            next++;
         }
+        splits[subcell_idx + 1] = splits[subcell_idx] + subcell_n_pts;
     }
 
-    // Limit sides to being 1 / 50 times the side length of the parent cell
-    const static double side_ratio = 1.0 / 50.0;
-    return {center_of_mass, std::max(parent_size * side_ratio, max_r)};
+    return splits;
 }
 
+template <size_t dim>
+std::vector<PtNormalREMOVE<dim>> combine_pts_normals(std::array<double,dim>* pts,
+        std::array<double,dim>* normals, size_t n_pts) 
+{
+    std::vector<PtNormalREMOVE<dim>> pts_normals(n_pts);
+    for (size_t i = 0; i < n_pts; i++) {
+        pts_normals[i] = {pts[i], normals[i], i};
+    }
+    return pts_normals;
+}
 
 template <size_t dim>
 struct Octree {
@@ -90,17 +185,17 @@ struct Octree {
         orig_idxs(n_pts),
         n_pts(n_pts)
     {
-        std::vector<PtNormal<dim>> pts_normals(n_pts);
-        for (size_t i = 0; i < n_pts; i++) {
-            pts_normals[i] = {in_pts[i], in_normals[i], i};
-        }
+        auto pts_normals = combine_pts_normals(in_pts, in_normals, n_pts);
         size_t n_leaves = n_pts / n_per_cell;
 
         // For n leaves in a binary tree, there should be ~2*n total nodes. This
         // will be a comfortable overestimate for an octree. TODO: Is this reserve worth
         // doing?
         nodes.reserve(2 * n_leaves);
-        add_node(0, n_pts, 0, n_per_cell, 1.0, 0, pts_normals);
+
+        auto bounds = bounding_box(in_pts, n_pts);
+        add_node(0, n_pts, n_per_cell, 0, bounds, pts_normals);
+
         max_height = nodes[0].height;
 
         for (size_t i = 0; i < n_pts; i++) {
@@ -110,77 +205,27 @@ struct Octree {
         }
     }
 
-    size_t add_node(size_t start, size_t end, int split_dim,
-        size_t n_per_cell, double parent_size, int depth, std::vector<PtNormal<dim>>& temp_pts)
+    size_t add_node(size_t start, size_t end, 
+        size_t n_per_cell, int depth, Cube<dim> bounds,
+        std::vector<PtNormalREMOVE<dim>>& temp_pts)
     {
-        // auto bounds = kd_bounds(temp_pts.data() + start, end - start, parent_size);
-
-        // if (end - start <= n_per_cell) {
-        //     nodes.push_back({start, end, bounds, true, 0, depth, nodes.size(), {0, 0}});
-        //     return nodes.back().idx;
-        // } else {
-        //     auto split = std::partition(
-        //         temp_pts.data() + start, temp_pts.data() + end,
-        //         [&] (const PtNormal& v) {
-        //             return v.pt[split_dim] < bounds.center[split_dim]; 
-        //         }
-        //     );
-        //     auto n_idx = nodes.size();
-        //     nodes.push_back({start, end, bounds, false, 0, depth, n_idx, {0, 0}});
-        //     auto l = add_node(
-        //         start, split - temp_pts.data(), (split_dim + 1) % 3,
-        //         n_per_cell, bounds.r, depth + 1, temp_pts
-        //     );
-        //     auto r = add_node(
-        //         split - temp_pts.data(), end, (split_dim + 1) % 3,
-        //         n_per_cell, bounds.r, depth + 1, temp_pts
-        //     );
-        //     nodes[n_idx].children = {l, r};
-        //     nodes[n_idx].height = std::max(nodes[l].height, nodes[r].height) + 1;
-        //     return n_idx;
-        // }
-        return 0;
+        bool is_leaf = end - start <= n_per_cell; 
+        auto n_idx = nodes.size();
+        nodes.push_back({start, end, bounds, is_leaf, 0, depth, n_idx, {}});
+        if (!is_leaf) {
+            auto splits = octree_partition(bounds, temp_pts.data() + start, temp_pts.data() + end);
+            int max_child_height = 0;
+            for (size_t octant = 0; octant < OctreeNode<dim>::split; octant++) {
+                auto child_bounds = get_subcell(bounds, make_child_idx<dim>(octant));
+                auto child_node_idx = add_node(
+                    start + splits[octant], start + splits[octant + 1],
+                    n_per_cell, depth + 1, child_bounds, temp_pts
+                );
+                nodes[n_idx].children[octant] = child_node_idx;
+                max_child_height = std::max(max_child_height, nodes[child_node_idx].height);
+            }
+            nodes[n_idx].height = max_child_height + 1;
+        }
+        return n_idx;
     }
 };
-
-// template <size_t dim> struct Ball;
-// template <size_t dim> struct Box;
-// 
-// template <size_t dim>
-// struct Octree {
-//     static const size_t split = 2<<(dim-1);
-//     typedef std::array<std::unique_ptr<Octree<dim>>,split> ChildrenType;
-//     const Box<dim> bounds;
-//     const Box<dim> true_bounds;
-//     const std::vector<size_t> indices;
-//     const size_t level;
-//     const size_t index;
-//     ChildrenType children;
-// 
-//     size_t n_immediate_children() const; 
-//     size_t n_children() const; 
-//     bool is_leaf() const; 
-//     size_t find_closest_nonempty_child(const Vec<double,dim>& pt) const;
-// };
-// 
-
-template <size_t dim>
-std::array<size_t,dim> make_child_idx(size_t i) 
-{
-    std::array<size_t,dim> child_idx;
-    for (int d = dim - 1; d >= 0; d--) {
-        auto idx = i % 2;
-        i = i >> 1;
-        child_idx[d] = idx;
-    }
-    return child_idx;
-}
-
-// 
-// template <size_t dim>
-// Octree<dim>
-// make_octree(const std::vector<Ball<dim>>& pts, size_t min_pts_per_cell);
-// 
-// template <size_t dim>
-// Octree<dim> 
-// make_octree(const std::vector<Vec<double,dim>>& pts, size_t min_pts_per_cell);

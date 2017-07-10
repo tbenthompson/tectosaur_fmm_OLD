@@ -4,7 +4,7 @@
 #include <functional>
 #include <memory>
 #include "fmm_kernels.hpp"
-#include "kdtree.hpp"
+#include "octree.hpp"
 
 std::vector<Vec3> inscribe_surf(const Sphere& b, double scaling, const std::vector<Vec3>& fmm_surf);
 
@@ -47,20 +47,20 @@ struct MatrixFreeOp {
     std::vector<int> src_n_end;
     std::vector<int> src_n_idx;
 
-    void insert(const KDNode& obs_n, const KDNode& src_n);
+    void insert(const OctreeNode<3>& obs_n, const OctreeNode<3>& src_n);
 };
 
 struct FMMMat {
-    KDTree obs_tree;
-    KDTree src_tree;
+    Octree<3> obs_tree;
+    Octree<3> src_tree;
     FMMConfig cfg;
     std::vector<Vec3> surf;
     int translation_surface_order;
 
-    FMMMat(KDTree obs_tree, KDTree src_tree, FMMConfig cfg,
+    FMMMat(Octree<3> obs_tree, Octree<3> src_tree, FMMConfig cfg,
         std::vector<Vec3> surf);
 
-    std::vector<Vec3> get_surf(const KDNode& src_n, double r);
+    std::vector<Vec3> get_surf(const OctreeNode<3>& src_n, double r);
     
     int tensor_dim() const { return cfg.tensor_dim(); }
 
@@ -81,4 +81,4 @@ struct FMMMat {
     std::vector<BlockSparseMat> uc2e;
 };
 
-FMMMat fmmmmmmm(const KDTree& obs_tree, const KDTree& src_tree, const FMMConfig& cfg);
+FMMMat fmmmmmmm(const Octree<3>& obs_tree, const Octree<3>& src_tree, const FMMConfig& cfg);
