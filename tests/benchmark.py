@@ -7,7 +7,7 @@ np.random.seed(10)
 
 kernel = 'elasticH'
 tensor_dim = 3
-n = 20000
+n = 100000
 mac = 3.0
 order = 100
 params = [1.0, 0.25]

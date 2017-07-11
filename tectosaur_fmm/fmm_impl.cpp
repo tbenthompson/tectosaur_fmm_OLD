@@ -75,15 +75,6 @@ void c2e(FMMMat<dim>& mat, BlockSparseMat& sub_mat, const OctreeNode<dim>& node,
          double check_r, double equiv_r) {
 
     mat.uc2e[node.height].insert(node, node);
-
-    // auto& pinv = mat.uc2e_ops[node.depth];
-    // auto n_rows = mat.surf.size() * mat.cfg.tensor_dim();
-    // sub_mat.blocks.push_back({
-    //     node.idx * n_rows, node.idx * n_rows,
-    //     int(n_rows), int(n_rows),
-    //     sub_mat.vals.size()
-    // });
-    // sub_mat.vals.insert(sub_mat.vals.end(), pinv.begin(), pinv.end());
 }
 
 int up_collect_touches = 0;
@@ -201,7 +192,7 @@ void FMMMat<dim>::uc2e_matvec(double* out, double* in, int level) {
     auto& op = uc2e_ops[level];
     int n_rows = cfg.tensor_dim() * surf.size();
     for (size_t i = 0; i < uc2e[level].src_n_idx.size(); i++) {
-        auto node_idx = m2p.src_n_idx[i];
+        auto node_idx = uc2e[level].src_n_idx[i];
         matrix_vector_product(
             op.data(), n_rows, n_rows, 
             &in[node_idx * n_rows],
@@ -234,19 +225,20 @@ template <size_t dim>
 std::vector<double> FMMMat<dim>::p2m_eval(double* in) {
     auto n_multipoles = surf.size() * src_tree.nodes.size() * tensor_dim();
     std::vector<double> m_check(n_multipoles, 0.0);
+    Timer t;
     p2m_matvec(m_check.data(), in);
+    t.report("p2m");
 
     std::vector<double> multipoles(n_multipoles, 0.0);
-    // auto multipoles = uc2e_old[0].matvec(m_check.data(), n_multipoles);
-    std::cout << "nmulti" << n_multipoles << std::endl;
     uc2e_matvec(multipoles.data(), m_check.data(), 0);
+    t.report("uc2e " + std::to_string(0));
 
     for (size_t i = 1; i < m2m.size(); i++) {
         zero_vec(m_check);
         m2m_matvec(m_check.data(), multipoles.data(), i);
+        t.report("m2m " + std::to_string(i));
         uc2e_matvec(multipoles.data(), m_check.data(), i);
-        // auto add_to_multipoles = uc2e_old[i].matvec(m_check.data(), n_multipoles);
-        // inplace_add_vecs(multipoles, add_to_multipoles);
+        t.report("uc2e " + std::to_string(i));
     }
     return multipoles;
 }
