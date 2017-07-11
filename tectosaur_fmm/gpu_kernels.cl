@@ -158,6 +158,65 @@ void m2p_kernel_${K.name}(__global Real* out, __global Real* in,
 }
 </%def>
 
+<%def name="p2m_kernel(K)">
+__kernel
+void p2m_kernel_${K.name}(__global Real* out, __global Real* in,
+        int n_blocks, __global int* src_n_start, __global int* src_n_end,
+        __global int* src_n_idx, int multipoles_per_cell, __global Real* surf,
+        __global Real* src_n_center, __global Real* src_n_width, Real outer_r,
+        __global Real* src_pts, __global Real* src_ns, __global Real* params)
+{
+    const int block_idx = get_global_id(0);
+    int src_start = src_n_start[block_idx];
+    int src_end = src_n_end[block_idx];
+    int src_idx = src_n_idx[block_idx];
+
+    Real surf_radius = src_n_width[src_idx] * inner_r * sqrt(3.0);
+    % for d in range(3):
+    Real center${dn(d)} = src_n_center[src_idx * 3 + ${d}];
+    % endfor
+
+    ${K.constants_code}
+
+    for (int i = obs_start; i < obs_end; i++) {
+        % for d in range(3):
+            Real x${dn(d)} = obs_pts[i * 3 + ${d}];
+            Real nobs${dn(d)} = obs_ns[i * 3 + ${d}];
+        % endfor
+
+        % for d in range(K.tensor_dim):
+        Real sum${dn(d)} = 0.0;
+        % endfor
+
+        for (int j = 0; j < multipoles_per_cell; j++) {
+            % for d in range(3):
+                Real nsrc${dn(d)} = surf[j * 3 + ${d}];
+                Real y${dn(d)} = surf_radius * nsrc${dn(d)} + center${dn(d)};
+            % endfor
+
+            % for d in range(K.tensor_dim):
+            Real in${dn(d)} = in[(src_idx * multipoles_per_cell + j) * ${K.tensor_dim} + ${d}];
+            % endfor
+
+            Real Dx = yx - xx;
+            Real Dy = yy - xy; 
+            Real Dz = yz - xz;
+            Real r2 = Dx * Dx + Dy * Dy + Dz * Dz;
+
+            if (r2 == 0) {
+                continue;
+            }
+
+            ${K.vector_code}
+        }
+
+        % for d in range(K.tensor_dim):
+        atomic_fadd(&out[i * ${K.tensor_dim} + ${d}], sum${dn(d)});
+        % endfor
+    }
+}
+</%def>
+
 % for K in fmm_kernels:
     ${p2p_kernel(K)}
     ${m2p_kernel(K)}

@@ -22,7 +22,7 @@ tree = fmm.three.Octree(pts, ns, order)
 t.report('build tree')
 
 orig_idxs = np.array(tree.orig_idxs)
-input_tree = input.reshape((-1,3))[orig_idxs,:].reshape(-1)
+input_tree = input.reshape((-1,tensor_dim))[orig_idxs,:].reshape(-1)
 t.report('map input to tree space')
 
 fmm_mat = fmm.three.fmmmmmmm(
@@ -35,7 +35,7 @@ t.report('report')
 output = fmm.eval_ocl(fmm_mat, input_tree)
 t.report('eval fmm')
 
-output = output.reshape((-1, 3))
+output = output.reshape((-1, tensor_dim))
 to_orig = np.empty_like(output)
 orig_idxs = np.array(tree.orig_idxs)
 to_orig[orig_idxs,:] = output

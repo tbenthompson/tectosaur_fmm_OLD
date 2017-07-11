@@ -44,29 +44,28 @@ def report_p2p_vs_m2p(fmm_mat):
 def data_to_gpu_p2p(fmm_mat, input_vals):
     gd = dict()
 
-    #TODO: Benchmark and check if its worth exposing the
-    # buffer interface for these arrays to avoid copying the data
-    gd['obs_pts'] = gpu.to_gpu(np.array(fmm_mat.obs_tree.pts), float_type)
-    gd['obs_normals'] = gpu.to_gpu(np.array(fmm_mat.obs_tree.normals), float_type)
-    gd['src_pts'] = gpu.to_gpu(np.array(fmm_mat.src_tree.pts), float_type)
-    gd['src_normals'] = gpu.to_gpu(np.array(fmm_mat.src_tree.normals), float_type)
+    gd['obs_pts'] = gpu.to_gpu(fmm_mat.obs_tree.pts, float_type)
+    gd['obs_normals'] = gpu.to_gpu(fmm_mat.obs_tree.normals, float_type)
+    gd['src_pts'] = gpu.to_gpu(fmm_mat.src_tree.pts, float_type)
+    gd['src_normals'] = gpu.to_gpu(fmm_mat.src_tree.normals, float_type)
 
-    gd['p2p_obs_n_start'] = gpu.to_gpu(np.array(fmm_mat.p2p.obs_n_start), np.int32)
-    gd['p2p_obs_n_end'] = gpu.to_gpu(np.array(fmm_mat.p2p.obs_n_end), np.int32)
-    gd['p2p_src_n_start'] = gpu.to_gpu(np.array(fmm_mat.p2p.src_n_start), np.int32)
-    gd['p2p_src_n_end'] = gpu.to_gpu(np.array(fmm_mat.p2p.src_n_end), np.int32)
+    gd['p2p_obs_n_start'] = gpu.to_gpu(fmm_mat.p2p.obs_n_start, np.int32)
+    gd['p2p_obs_n_end'] = gpu.to_gpu(fmm_mat.p2p.obs_n_end, np.int32)
+    gd['p2p_src_n_start'] = gpu.to_gpu(fmm_mat.p2p.src_n_start, np.int32)
+    gd['p2p_src_n_end'] = gpu.to_gpu(fmm_mat.p2p.src_n_end, np.int32)
 
     gd['params'] = gpu.to_gpu(np.array(fmm_mat.cfg.params), float_type)
     gd['out'] = gpu.zeros_gpu(fmm_mat.cfg.tensor_dim() * gd['obs_pts'].shape[0], float_type)
     gd['in'] = gpu.to_gpu(input_vals, float_type)
+
     return gd
 
 def data_to_gpu_m2p(fmm_mat, multipoles, gd):
     gd['surf'] = gpu.to_gpu(np.array(fmm_mat.surf), float_type)
 
-    gd['m2p_obs_n_start'] = gpu.to_gpu(np.array(fmm_mat.m2p.obs_n_start), np.int32)
-    gd['m2p_obs_n_end'] = gpu.to_gpu(np.array(fmm_mat.m2p.obs_n_end), np.int32)
-    gd['m2p_src_n_idx'] = gpu.to_gpu(np.array(fmm_mat.m2p.src_n_idx), np.int32)
+    gd['m2p_obs_n_start'] = gpu.to_gpu(fmm_mat.m2p.obs_n_start, np.int32)
+    gd['m2p_obs_n_end'] = gpu.to_gpu(fmm_mat.m2p.obs_n_end, np.int32)
+    gd['m2p_src_n_idx'] = gpu.to_gpu(fmm_mat.m2p.src_n_idx, np.int32)
 
     gd['src_n_center'] = gpu.to_gpu(
         np.array([n.bounds.center for n in fmm_mat.src_tree.nodes]).flatten(),
@@ -104,22 +103,47 @@ def gpu_m2p(fmm_mat, gd):
             gd['params'].data
         )
 
-def eval_ocl(fmm_mat, input_vals):
-    t = Timer()
+def data_to_gpu_p2m(fmm_mat, gd):
+    gd['m2p_src_n_start'] = gpu.to_gpu(fmm_mat.p2m.src_n_start, np.int32)
+    gd['m2p_src_n_end'] = gpu.to_gpu(fmm_mat.p2m.src_n_end, np.int32)
+    gd['m2p_src_n_idx'] = gpu.to_gpu(fmm_mat.p2m.src_n_idx, np.int32)
 
+    n_levels = len(fmm_mat.m2m)
+    gd['m2m_obs_n_idx'] = [
+        gpu.to_gpu(fmm_mat.m2m[level].obs_n_idx, np.int32) for level in range(n_levels)
+    ]
+    gd['m2m_src_n_idx'] = [
+        gpu.to_gpu(fmm_mat.m2m[level].obs_n_idx, np.int32) for level in range(n_levels)
+    ]
+
+def gpu_p2m(fmm_mat, gd):
+    p2m = getattr(get_gpu_module(), 'p2m_kernel_' + fmm_mat.cfg.kernel_name())
+    n_p2m = gd['p2m_obs_n_start'].shape[0]
+    m_check_size = fmm_mat.cfg.tensor_dim() * gd['surf'].shape[0] * gd['src_n_center'].shape[0]
+    gd['m_check'] = gpu.zeros_gpu(m_check_size, float_type)
+    if n_p2m > 0:
+        p2m(
+            gpu.gpu_queue, (n_p2m,), None,
+            gpu_m_check.data, gd['in'].data,
+            np.int32(n_p2m), gd['m2p_obs_n_start'].data, gd['m2p_obs_n_end'].data,
+            gd['m2p_src_n_idx'].data, np.int32(gd['surf'].shape[0]), gd['surf'].data,
+            gd['src_n_center'].data, gd['src_n_width'].data, float_type(fmm_mat.cfg.outer_r),
+            gd['src_pts'].data, gd['src_normals'].data,
+            gd['params'].data
+        )
+
+def eval_ocl(fmm_mat, input_vals):
     gpu_data = data_to_gpu_p2p(fmm_mat, input_vals)
-    t.report('data to gpu p2p')
+    data_to_gpu_p2m(fmm_mat, gpu_data)
     gpu_p2p(fmm_mat, gpu_data)
-    t.report('launch p2p')
+
+    # gpu_p2m(gpu_data)
 
     multipoles = fmm_mat.p2m_eval(input_vals)
-    t.report('p2m')
 
     data_to_gpu_m2p(fmm_mat, multipoles, gpu_data)
-    t.report('data to gpu m2p')
     gpu_m2p(fmm_mat, gpu_data)
     retval = gpu_data['out'].get()
-    t.report("m2p")
 
     return retval
 

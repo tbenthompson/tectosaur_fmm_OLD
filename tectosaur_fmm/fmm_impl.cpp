@@ -189,7 +189,7 @@ template <size_t dim>
 void FMMMat<dim>::uc2e_matvec(double* out, double* in, int level) {
     int n_rows = cfg.tensor_dim() * surf.size();
     for (size_t i = 0; i < uc2e[level].src_n_idx.size(); i++) {
-        auto depth = src_tree.nodes[uc2e[level].src_n_idx[i]].depth;
+        auto depth = src_tree.nodes[uc2e[level].src_n_idx[0]].depth;
         auto& op = uc2e_ops[depth];
         auto node_idx = uc2e[level].src_n_idx[i];
         matrix_vector_product(

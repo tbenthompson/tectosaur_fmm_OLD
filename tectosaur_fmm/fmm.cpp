@@ -51,8 +51,18 @@ void wrap_dim(py::module& m) {
         })
         .def("root", &Octree<dim>::root)
         .def_readonly("nodes", &Octree<dim>::nodes)
-        .def_readonly("pts", &Octree<dim>::pts)
-        .def_readonly("normals", &Octree<dim>::normals)
+        .def_property_readonly("pts", [] (Octree<dim>& op) {
+            return make_array<double>(
+                {op.pts.size(), dim},
+                reinterpret_cast<double*>(op.pts.data())
+            );
+        })
+        .def_property_readonly("normals", [] (Octree<dim>& op) {
+            return make_array<double>(
+                {op.normals.size(), dim},
+                reinterpret_cast<double*>(op.normals.data())
+            );
+        })
         .def_readonly("orig_idxs", &Octree<dim>::orig_idxs)
         .def_readonly("max_height", &Octree<dim>::max_height);
 
@@ -80,7 +90,9 @@ void wrap_dim(py::module& m) {
         .def_readonly("src_tree", &FMMMat<dim>::src_tree)
         .def_readonly("surf", &FMMMat<dim>::surf)
         .def_readonly("p2p", &FMMMat<dim>::p2p)
+        .def_readonly("p2m", &FMMMat<dim>::p2m)
         .def_readonly("m2p", &FMMMat<dim>::m2p)
+        .def_readonly("m2m", &FMMMat<dim>::m2m)
         .def_readonly("cfg", &FMMMat<dim>::cfg)
         .def_readonly("translation_surface_order", &FMMMat<dim>::translation_surface_order)
         .def_readonly("uc2e", &FMMMat<dim>::uc2e)
@@ -135,7 +147,6 @@ void wrap_dim(py::module& m) {
     });
 }
 
-
 PYBIND11_PLUGIN(fmm) {
     py::module m("fmm");
     auto two = m.def_submodule("two");
@@ -151,13 +162,19 @@ PYBIND11_PLUGIN(fmm) {
             return array_from_vector(out);
         });
 
+
+#define NPARRAYPROP(name)\
+    def_property_readonly(#name, [] (MatrixFreeOp& op) {\
+        return make_array({op.name.size()}, op.name.data());\
+    })
+
     py::class_<MatrixFreeOp>(m, "MatrixFreeOp")
-        .def_readonly("obs_n_start", &MatrixFreeOp::obs_n_start)
-        .def_readonly("obs_n_end", &MatrixFreeOp::obs_n_end)
-        .def_readonly("obs_n_idx", &MatrixFreeOp::obs_n_idx)
-        .def_readonly("src_n_start", &MatrixFreeOp::src_n_start)
-        .def_readonly("src_n_end", &MatrixFreeOp::src_n_end)
-        .def_readonly("src_n_idx", &MatrixFreeOp::src_n_idx);
+        .NPARRAYPROP(obs_n_start)
+        .NPARRAYPROP(obs_n_end)
+        .NPARRAYPROP(obs_n_idx)
+        .NPARRAYPROP(src_n_start)
+        .NPARRAYPROP(src_n_end)
+        .NPARRAYPROP(src_n_idx);
 
     return m.ptr();
 }
