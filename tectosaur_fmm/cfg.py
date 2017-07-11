@@ -51,7 +51,9 @@ def to_fmm_dir(filenames):
 
 def lib_cfg(cfg):
     setup_pybind11(cfg)
-    cfg['compiler_args'] += ['-std=c++14', '-O3', '-g', '-Wall', '-Werror', '-fopenmp']
+    cfg['compiler_args'] += [
+        '-std=c++14', '-O3', '-g', '-Wall', '-Werror', '-fopenmp', '-UNDEBUG', '-DDEBUG'
+    ]
     cfg['sources'] += to_fmm_dir([
         'fmm_impl.cpp', 'blas_wrapper.cpp', 'fmm_kernels.cpp', 'octree.cpp'
     ])

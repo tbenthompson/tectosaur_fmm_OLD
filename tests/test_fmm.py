@@ -114,6 +114,7 @@ def test_p2p(laplace_kernel, dim):
     ), accuracy = 10)
 
 def test_laplace_all(laplace_kernel, dim):
+    np.random.seed(10)
     order = 16 if dim == 2 else 64
     check_kernel(
         laplace_kernel, *run_full(10000, rand_pts(dim), 2.6, order, laplace_kernel, [])

@@ -83,7 +83,6 @@ struct FMMMat {
 
     std::vector<std::vector<double>> uc2e_ops;
     std::vector<MatrixFreeOp> uc2e;
-    std::vector<BlockSparseMat> uc2e_old;
 
     FMMMat(Octree<dim> obs_tree, Octree<dim> src_tree, FMMConfig<dim> cfg,
         std::vector<std::array<double,dim>> surf);
