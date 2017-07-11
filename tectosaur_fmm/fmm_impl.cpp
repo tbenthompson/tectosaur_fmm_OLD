@@ -74,16 +74,16 @@ template <size_t dim>
 void c2e(FMMMat<dim>& mat, BlockSparseMat& sub_mat, const OctreeNode<dim>& node,
          double check_r, double equiv_r) {
 
-    auto& pinv = mat.uc2e_ops[node.depth];
-
     mat.uc2e[node.height].insert(node, node);
-    auto n_rows = mat.surf.size() * mat.cfg.tensor_dim();
-    sub_mat.blocks.push_back({
-        node.idx * n_rows, node.idx * n_rows,
-        int(n_rows), int(n_rows),
-        sub_mat.vals.size()
-    });
-    sub_mat.vals.insert(sub_mat.vals.end(), pinv.begin(), pinv.end());
+
+    // auto& pinv = mat.uc2e_ops[node.depth];
+    // auto n_rows = mat.surf.size() * mat.cfg.tensor_dim();
+    // sub_mat.blocks.push_back({
+    //     node.idx * n_rows, node.idx * n_rows,
+    //     int(n_rows), int(n_rows),
+    //     sub_mat.vals.size()
+    // });
+    // sub_mat.vals.insert(sub_mat.vals.end(), pinv.begin(), pinv.end());
 }
 
 int up_collect_touches = 0;
@@ -236,16 +236,17 @@ std::vector<double> FMMMat<dim>::p2m_eval(double* in) {
     std::vector<double> m_check(n_multipoles, 0.0);
     p2m_matvec(m_check.data(), in);
 
-    // std::vector<double> multipoles(n_multipoles, 0.0);
-    auto multipoles = uc2e_old[0].matvec(m_check.data(), n_multipoles);
-    // uc2e_matvec(multipoles.data(), m_check.data(), 0);
+    std::vector<double> multipoles(n_multipoles, 0.0);
+    // auto multipoles = uc2e_old[0].matvec(m_check.data(), n_multipoles);
+    std::cout << "nmulti" << n_multipoles << std::endl;
+    uc2e_matvec(multipoles.data(), m_check.data(), 0);
 
     for (size_t i = 1; i < m2m.size(); i++) {
         zero_vec(m_check);
         m2m_matvec(m_check.data(), multipoles.data(), i);
-        /* uc2e_matvec(multipoles.data(), m_check.data(), i); */
-        auto add_to_multipoles = uc2e_old[i].matvec(m_check.data(), n_multipoles);
-        inplace_add_vecs(multipoles, add_to_multipoles);
+        uc2e_matvec(multipoles.data(), m_check.data(), i);
+        // auto add_to_multipoles = uc2e_old[i].matvec(m_check.data(), n_multipoles);
+        // inplace_add_vecs(multipoles, add_to_multipoles);
     }
     return multipoles;
 }
@@ -262,7 +263,7 @@ template <size_t dim>
 void build_uc2e(FMMMat<dim>& mat) {
     mat.uc2e_ops.resize(mat.src_tree.max_height + 1);
 #pragma omp parallel for
-    for (int i = 0; i < mat.src_tree.max_height + 1; i++) {
+    for (int i = mat.src_tree.max_height; i >= 0; i--) {
         double width = mat.src_tree.root().bounds.width / std::pow(2.0, static_cast<double>(i));
         std::array<double,dim> center{};
         Cube<dim> bounds(center, width);

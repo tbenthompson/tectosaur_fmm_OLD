@@ -1,8 +1,9 @@
+optimize gpu kernels
+
 move fmm_integral_op into this package
 
 use FMM for okada -- just try it out first, make sure its accurate.
 
-optimize gpu kernels
 
 read about the implementation of the high-performance volumetric integration tools.
 

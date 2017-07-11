@@ -3,34 +3,30 @@ from tectosaur_fmm.cfg import lib_cfg
 lib_cfg(cfg)
 %>
 
+#include "include/pybind11_nparray.hpp"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/functional.h>
 
-#include "include/pybind11_nparray.hpp"
 
 #include "fmm_impl.hpp"
 #include "octree.hpp"
 
 namespace py = pybind11;
 
-
-int main(int,char**);
-
 template <size_t dim>
 void wrap_dim(py::module& m) {
-    std::string dim_str = std::to_string(dim);
+    m.def("surrounding_surface", surrounding_surface<dim>);
+    m.def("inscribe_surf", &inscribe_surf<dim>);
+    m.def("c2e_solve", &c2e_solve<dim>);
+
+    m.def("in_box", &in_box<dim>);
 
     py::class_<Cube<dim>>(m, "Cube")
         .def(py::init<std::array<double,dim>, double>())
         .def_readonly("center", &Cube<dim>::center)
         .def_readonly("width", &Cube<dim>::width);
 
-    m.def("surrounding_surface", surrounding_surface<dim>);
-    m.def("inscribe_surf", &inscribe_surf<dim>);
-    m.def("c2e_solve", &c2e_solve<dim>);
-
-    m.def("in_box", &in_box<dim>);
 
     py::class_<OctreeNode<dim>>(m, "OctreeNode")
         .def_readonly("start", &OctreeNode<dim>::start)

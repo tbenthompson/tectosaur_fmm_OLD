@@ -175,9 +175,9 @@ void matrix_vector_product(double* matrix, int n_rows, int n_cols,
         return;
     }
     char TRANS = 'T';
-    double alpha = 1;
-    double beta = 0;
-    int inc = 1;
+    double alpha = 1.0;
+    double beta = 1.0;
+    int inc = 1.0;
     //IMPORTANT that n_cols and n_rows are switched because the 3bem internal
     //matrix is in row-major order and BLAS expects column major
     dgemv_(&TRANS, &n_cols, &n_rows, &alpha, matrix,
@@ -187,7 +187,7 @@ void matrix_vector_product(double* matrix, int n_rows, int n_cols,
 std::vector<double> matrix_vector_product(double* matrix, int n_rows,
     int n_cols, double* vector)
 {
-    std::vector<double> out(n_rows);
+    std::vector<double> out(n_rows, 0.0);
     matrix_vector_product(matrix, n_rows, n_cols, vector, out.data());
     return out;
 }

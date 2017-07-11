@@ -8,6 +8,7 @@ from tectosaur_fmm.cfg import float_type
 
 import cppimport
 fmm = cppimport.imp("tectosaur_fmm.fmm").fmm
+
 for k in dir(fmm):
     locals()[k] = getattr(fmm, k)
 

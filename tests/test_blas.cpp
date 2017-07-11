@@ -48,6 +48,18 @@ TEST_CASE("Condition number")
     REQUIRE(cond == doctest::Approx(2.7630857945186595).epsilon(1e-12));
 }
 
+TEST_CASE("matrix vector product out pointer")
+{
+    
+    std::vector<double> matrix{
+        2, 1, -1, 0.5
+    };
+    std::vector<double> vec{4, -2};
+    std::vector<double> result{1, 1};
+    matrix_vector_product(matrix.data(), 2, 2, vec.data(), result.data());
+    REQUIRE_ARRAY_CLOSE(result, std::vector<double>{7, -4}, 2, 1e-15);
+}
+
 TEST_CASE("matrix vector product")
 {
     

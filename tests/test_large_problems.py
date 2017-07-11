@@ -5,40 +5,6 @@ import tectosaur_fmm.fmm_wrapper as fmm
 from tectosaur.ops.sparse_integral_op import farfield_pts_wrapper
 from test_fmm import run_full, rand_pts, check
 
-@slow
-def test_benchmark():
-    kernel = 'elasticH'
-    tensor_dim = 3
-    np.random.seed(10)
-    n = 20000
-    params = [1.0, 0.25]
-    pts = np.random.rand(n, 3)
-    ns = np.random.rand(n, 3)
-    ns /= np.linalg.norm(ns, axis = 1)[:,np.newaxis]
-    input = np.random.rand(n * tensor_dim)
-
-    mac = 3.0
-    results = []
-    for order in [50, 100, 150]:
-        kd = fmm.three.Octree(pts, ns, order)
-        orig_idxs = np.array(kd.orig_idxs)
-        input_kd = input.reshape((-1,3))[orig_idxs,:].reshape(-1)
-        fmm_mat = fmm.three.fmmmmmmm(
-            kd, kd, fmm.three.FMMConfig(1.1, mac, order, kernel, params)
-        )
-        output = fmm.eval_ocl(fmm_mat, input_kd)
-
-        output = output.reshape((-1, 3))
-        to_orig = np.empty_like(output)
-        orig_idxs = np.array(kd.orig_idxs)
-        to_orig[orig_idxs,:] = output
-        results.append(to_orig)
-        if len(results) > 1:
-            check(results[-2].flatten(), results[-1].flatten(), 0)
-    results = np.array(results)
-    print(results[:,0])
-
-
 # test fmm with elastic kernels more, this is confusing...
 # i think there are a variety of issues here.
 # -- first, with single precision, nearfield computations get messed up because the 1 / r^2 or 1/r^3 has numerical precision issues
