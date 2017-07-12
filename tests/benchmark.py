@@ -5,9 +5,9 @@ from tectosaur.util.timer import Timer
 t = Timer()
 np.random.seed(10)
 
-kernel = 'elasticH'
+kernel = 'elasticU'
 tensor_dim = 3
-n = 100000
+n = 1000
 mac = 3.0
 order = 100
 params = [1.0, 0.25]

@@ -94,13 +94,13 @@ def check_kernel(K, obs_pts, obs_ns, src_pts, src_ns, est, accuracy = 3):
     dim = obs_pts.shape[1]
     tensor_dim = int(est.size / obs_pts.shape[0])
     correct_mat = module[dim].direct_eval(
-        K, obs_pts, obs_ns, src_pts, src_ns, []
+        K, obs_pts, obs_ns, src_pts, src_ns, [1.0, 0.25]
     ).reshape((obs_pts.shape[0] * tensor_dim, src_pts.shape[0] * tensor_dim))
-    correct = correct_mat.dot(np.ones(src_pts.shape[0]))
+    correct = correct_mat.dot(np.ones(src_pts.shape[0] * tensor_dim))
     check(est, correct, accuracy)
 
 def test_ones(dim):
-    obs_pts, _, src_pts, _, est = run_full(5000, rand_pts(dim), 0.5, 1, "one",[])
+    obs_pts, _, src_pts, _, est = run_full(5000, rand_pts(dim), 0.5, 1, "one",[], ocl = True)
     assert(np.all(np.abs(est - src_pts.shape[0]) < 1e-3))
 
 import pytest
@@ -116,9 +116,16 @@ def test_p2p(laplace_kernel, dim):
 def test_laplace_all(laplace_kernel, dim):
     np.random.seed(10)
     order = 16 if dim == 2 else 64
-    check_kernel(
-        laplace_kernel, *run_full(10000, rand_pts(dim), 2.6, order, laplace_kernel, [])
-    )
+    check_kernel(laplace_kernel, *run_full(
+        10000, rand_pts(dim), 2.6, order, laplace_kernel, [], ocl = True
+    ), accuracy = 1)
+
+def test_elastic():
+    np.random.seed(10)
+    order = 16 if dim == 2 else 64
+    check_kernel('elasticU', *run_full(
+        4000, rand_pts(3), 2.6, order, 'elasticU', [1.0, 0.25], ocl = False
+    ), accuracy = 1)
 
 def test_m2p(laplace_kernel, dim):
     order = 15 if dim == 2 else 100
@@ -131,4 +138,4 @@ def test_irregular():
     check_kernel(K, *run_full(10000, ellipsoid_pts, 2.6, 35, K, []))
 
 if __name__ == '__main__':
-    test_p2p('laplaceS', 2)
+    test_elastic()

@@ -14,6 +14,10 @@ for k in dir(fmm):
 
 gpu_module = None
 
+if 'profile' not in __builtins__:
+    def profile(f):
+        return f
+
 def get_gpu_module():
     global gpu_module
     if gpu_module is None:
@@ -25,47 +29,53 @@ def get_gpu_module():
     return gpu_module
 
 def report_p2p_vs_m2p(fmm_mat):
+    surf_n = len(fmm_mat.surf)
+
+    starts = fmm_mat.p2m.obs_n_start
+    ends = fmm_mat.p2m.obs_n_end
+    p2m_i = np.sum((ends - starts) * surf_n)
+
+    m2m_i = (
+        sum([len(fmm_mat.m2m[level].obs_n_idx) for level in range(len(fmm_mat.m2m))])
+        * surf_n * surf_n
+    )
+
     ends = np.array(fmm_mat.m2p.obs_n_end)
     starts = np.array(fmm_mat.m2p.obs_n_start)
-    m2p_i = np.sum(len(fmm_mat.surf) * (ends - starts))
+    m2p_i = np.sum((ends - starts) * surf_n)
     obs_ends = np.array(fmm_mat.p2p.obs_n_end)
     obs_starts = np.array(fmm_mat.p2p.obs_n_start)
     src_ends = np.array(fmm_mat.p2p.src_n_end)
     src_starts = np.array(fmm_mat.p2p.src_n_start)
     p2p_i = np.sum((obs_ends - obs_starts) * (src_ends - src_starts))
-    tree_i = p2p_i + m2p_i
+    tree_i = p2p_i + m2p_i + p2m_i + m2m_i
     direct_i = len(fmm_mat.obs_tree.pts) * len(fmm_mat.src_tree.pts)
 
     print('compression factor: ' + str(tree_i / direct_i))
     print('total tree interactions: ' + str(tree_i))
     print('total p2p interactions: ' + str(p2p_i))
+    print('total p2m interactions: ' + str(p2m_i))
+    print('total m2m interactions: ' + str(m2m_i))
     print('total m2p interactions: ' + str(m2p_i))
 
-def data_to_gpu_p2p(fmm_mat, input_vals):
+def data_to_gpu(fmm_mat, input_vals):
     gd = dict()
 
     gd['obs_pts'] = gpu.to_gpu(fmm_mat.obs_tree.pts, float_type)
     gd['obs_normals'] = gpu.to_gpu(fmm_mat.obs_tree.normals, float_type)
     gd['src_pts'] = gpu.to_gpu(fmm_mat.src_tree.pts, float_type)
     gd['src_normals'] = gpu.to_gpu(fmm_mat.src_tree.normals, float_type)
-
-    gd['p2p_obs_n_start'] = gpu.to_gpu(fmm_mat.p2p.obs_n_start, np.int32)
-    gd['p2p_obs_n_end'] = gpu.to_gpu(fmm_mat.p2p.obs_n_end, np.int32)
-    gd['p2p_src_n_start'] = gpu.to_gpu(fmm_mat.p2p.src_n_start, np.int32)
-    gd['p2p_src_n_end'] = gpu.to_gpu(fmm_mat.p2p.src_n_end, np.int32)
-
-    gd['params'] = gpu.to_gpu(np.array(fmm_mat.cfg.params), float_type)
-    gd['out'] = gpu.zeros_gpu(fmm_mat.cfg.tensor_dim() * gd['obs_pts'].shape[0], float_type)
-    gd['in'] = gpu.to_gpu(input_vals, float_type)
-
-    return gd
-
-def data_to_gpu_m2p(fmm_mat, multipoles, gd):
+    gd['dim'] = gd['obs_pts'].shape[1]
+    gd['tensor_dim'] = fmm_mat.cfg.tensor_dim
     gd['surf'] = gpu.to_gpu(np.array(fmm_mat.surf), float_type)
-
-    gd['m2p_obs_n_start'] = gpu.to_gpu(fmm_mat.m2p.obs_n_start, np.int32)
-    gd['m2p_obs_n_end'] = gpu.to_gpu(fmm_mat.m2p.obs_n_end, np.int32)
-    gd['m2p_src_n_idx'] = gpu.to_gpu(fmm_mat.m2p.src_n_idx, np.int32)
+    gd['n_surf_pts'] = np.int32(gd['surf'].shape[0])
+    gd['n_surf_dofs'] = gd['n_surf_pts'] * gd['tensor_dim']
+    gd['params'] = gpu.to_gpu(np.array(fmm_mat.cfg.params), float_type)
+    gd['out'] = gpu.zeros_gpu(gd['tensor_dim'] * gd['obs_pts'].shape[0], float_type)
+    gd['in'] = gpu.to_gpu(input_vals, float_type)
+    gd['n_multipoles'] = gd['n_surf_dofs'] * fmm_mat.src_tree.n_nodes
+    gd['m_check'] = gpu.zeros_gpu(gd['n_multipoles'], float_type)
+    gd['multipoles'] = gpu.zeros_gpu(gd['n_multipoles'], float_type)
 
     gd['src_n_center'] = gpu.to_gpu(
         np.array([n.bounds.center for n in fmm_mat.src_tree.nodes]).flatten(),
@@ -74,10 +84,38 @@ def data_to_gpu_m2p(fmm_mat, multipoles, gd):
     gd['src_n_width'] = gpu.to_gpu(np.array(
         [n.bounds.width for n in fmm_mat.src_tree.nodes]
     ), float_type)
-    gd['multipoles'] = gpu.to_gpu(multipoles, float_type)
+
+    gd['p2p_obs_n_start'] = gpu.to_gpu(fmm_mat.p2p.obs_n_start, np.int32)
+    gd['p2p_obs_n_end'] = gpu.to_gpu(fmm_mat.p2p.obs_n_end, np.int32)
+    gd['p2p_src_n_start'] = gpu.to_gpu(fmm_mat.p2p.src_n_start, np.int32)
+    gd['p2p_src_n_end'] = gpu.to_gpu(fmm_mat.p2p.src_n_end, np.int32)
+
+    gd['p2m_parent_n_start'] = gpu.to_gpu(fmm_mat.p2m.src_n_start, np.int32)
+    gd['p2m_parent_n_end'] = gpu.to_gpu(fmm_mat.p2m.src_n_end, np.int32)
+    gd['p2m_parent_n_idx'] = gpu.to_gpu(fmm_mat.p2m.src_n_idx, np.int32)
+
+    n_levels = len(fmm_mat.m2m)
+    gd['m2m_parent_n_idx'] = [
+        gpu.to_gpu(fmm_mat.m2m[level].obs_n_idx, np.int32) for level in range(n_levels)
+    ]
+    gd['m2m_child_n_idx'] = [
+        gpu.to_gpu(fmm_mat.m2m[level].src_n_idx, np.int32) for level in range(n_levels)
+    ]
+
+    gd['uc2e_node_n_idx'] = [
+        gpu.to_gpu(fmm_mat.uc2e[level].obs_n_idx, np.int32) for level in range(n_levels)
+    ]
+    gd['uc2e_node_depth'] = gpu.to_gpu(np.array([n.depth for n in fmm_mat.src_tree.nodes]), np.int32)
+    gd['uc2e_ops'] = gpu.to_gpu(fmm_mat.uc2e_ops, float_type)
+
+    gd['m2p_obs_n_start'] = gpu.to_gpu(fmm_mat.m2p.obs_n_start, np.int32)
+    gd['m2p_obs_n_end'] = gpu.to_gpu(fmm_mat.m2p.obs_n_end, np.int32)
+    gd['m2p_src_n_idx'] = gpu.to_gpu(fmm_mat.m2p.src_n_idx, np.int32)
+    return gd
+
 
 def gpu_p2p(fmm_mat, gd):
-    p2p = getattr(get_gpu_module(), 'p2p_kernel_' + fmm_mat.cfg.kernel_name())
+    p2p = getattr(get_gpu_module(), 'p2p_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
     n_p2p = gd['p2p_obs_n_start'].shape[0]
     p2p(
         gpu.gpu_queue, (n_p2p,), None,
@@ -90,7 +128,7 @@ def gpu_p2p(fmm_mat, gd):
     )
 
 def gpu_m2p(fmm_mat, gd):
-    m2p = getattr(get_gpu_module(), 'm2p_kernel_' + fmm_mat.cfg.kernel_name())
+    m2p = getattr(get_gpu_module(), 'm2p_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
     n_m2p = gd['m2p_obs_n_start'].shape[0]
     if n_m2p > 0:
         m2p(
@@ -103,45 +141,69 @@ def gpu_m2p(fmm_mat, gd):
             gd['params'].data
         )
 
-def data_to_gpu_p2m(fmm_mat, gd):
-    gd['m2p_src_n_start'] = gpu.to_gpu(fmm_mat.p2m.src_n_start, np.int32)
-    gd['m2p_src_n_end'] = gpu.to_gpu(fmm_mat.p2m.src_n_end, np.int32)
-    gd['m2p_src_n_idx'] = gpu.to_gpu(fmm_mat.p2m.src_n_idx, np.int32)
 
-    n_levels = len(fmm_mat.m2m)
-    gd['m2m_obs_n_idx'] = [
-        gpu.to_gpu(fmm_mat.m2m[level].obs_n_idx, np.int32) for level in range(n_levels)
-    ]
-    gd['m2m_src_n_idx'] = [
-        gpu.to_gpu(fmm_mat.m2m[level].obs_n_idx, np.int32) for level in range(n_levels)
-    ]
-
+@profile
 def gpu_p2m(fmm_mat, gd):
-    p2m = getattr(get_gpu_module(), 'p2m_kernel_' + fmm_mat.cfg.kernel_name())
-    n_p2m = gd['p2m_obs_n_start'].shape[0]
-    m_check_size = fmm_mat.cfg.tensor_dim() * gd['surf'].shape[0] * gd['src_n_center'].shape[0]
-    gd['m_check'] = gpu.zeros_gpu(m_check_size, float_type)
+    p2m = getattr(get_gpu_module(), 'p2m_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
+    n_p2m = gd['p2m_parent_n_start'].shape[0]
     if n_p2m > 0:
         p2m(
             gpu.gpu_queue, (n_p2m,), None,
-            gpu_m_check.data, gd['in'].data,
-            np.int32(n_p2m), gd['m2p_obs_n_start'].data, gd['m2p_obs_n_end'].data,
-            gd['m2p_src_n_idx'].data, np.int32(gd['surf'].shape[0]), gd['surf'].data,
+            gd['m_check'].data, gd['in'].data,
+            np.int32(n_p2m), gd['p2m_parent_n_start'].data, gd['p2m_parent_n_end'].data,
+            gd['p2m_parent_n_idx'].data, np.int32(gd['surf'].shape[0]), gd['surf'].data,
             gd['src_n_center'].data, gd['src_n_width'].data, float_type(fmm_mat.cfg.outer_r),
             gd['src_pts'].data, gd['src_normals'].data,
             gd['params'].data
         )
 
+def gpu_m2m(fmm_mat, gd, level):
+    m2m = getattr(get_gpu_module(), 'm2m_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
+    n_m2m = gd['m2m_parent_n_idx'][level].shape[0]
+    if n_m2m > 0:
+        m2m(
+            gpu.gpu_queue, (n_m2m,), None,
+            gd['m_check'].data, gd['multipoles'].data,
+            np.int32(n_m2m), gd['m2m_parent_n_idx'][level].data, gd['m2m_child_n_idx'][level].data,
+            np.int32(gd['n_surf_dofs']), gd['surf'].data,
+            gd['src_n_center'].data, gd['src_n_width'].data,
+            float_type(fmm_mat.cfg.inner_r), float_type(fmm_mat.cfg.outer_r),
+            gd['params'].data
+        )
+
+def gpu_uc2e(fmm_mat, gd, level):
+    uc2e = getattr(get_gpu_module(), 'uc2e_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
+    n_uc2e = gd['uc2e_node_n_idx'][level].shape[0]
+    n_uc2e_rows = gd['tensor_dim'] * gd['n_surf_pts']
+    if n_uc2e > 0:
+        uc2e(
+            gpu.gpu_queue, (n_uc2e,), None,
+            gd['multipoles'].data, gd['m_check'].data,
+            np.int32(n_uc2e), np.int32(n_uc2e_rows),
+            gd['uc2e_node_n_idx'][level].data,
+            gd['uc2e_node_depth'].data,
+            gd['uc2e_ops'].data
+        )
+
+@profile
 def eval_ocl(fmm_mat, input_vals):
-    gpu_data = data_to_gpu_p2p(fmm_mat, input_vals)
-    data_to_gpu_p2m(fmm_mat, gpu_data)
+    gpu_data = data_to_gpu(fmm_mat, input_vals)
+
+    gpu_p2m(fmm_mat, gpu_data)
+    gpu_uc2e(fmm_mat, gpu_data, 0)
+
+    for i in range(1, len(fmm_mat.m2m)):
+        gpu_data['m_check'][:] = 0
+#
+#         multipoles = gpu_data['multipoles'].get()
+#         m_check = np.zeros(gpu_data['n_multipoles'])
+#         fmm_mat.m2m_eval(m_check, multipoles, i)
+#         gpu_data['m_check'] = gpu.to_gpu(multipoles, float_type)
+
+        gpu_m2m(fmm_mat, gpu_data, i)
+        gpu_uc2e(fmm_mat, gpu_data, i)
+
     gpu_p2p(fmm_mat, gpu_data)
-
-    # gpu_p2m(gpu_data)
-
-    multipoles = fmm_mat.p2m_eval(input_vals)
-
-    data_to_gpu_m2p(fmm_mat, multipoles, gpu_data)
     gpu_m2p(fmm_mat, gpu_data)
     retval = gpu_data['out'].get()
 
@@ -149,8 +211,20 @@ def eval_ocl(fmm_mat, input_vals):
 
 
 def eval_cpu(fmm_mat, input_vals):
-    report_p2p_vs_m2p(fmm_mat)
-    p2p = fmm_mat.p2p_eval(input_vals)
-    multipoles = fmm_mat.p2m_eval(input_vals)
-    m2p = fmm_mat.m2p_eval(multipoles)
-    return p2p + m2p
+    n_out = fmm_mat.obs_tree.pts.shape[0] * fmm_mat.cfg.tensor_dim
+    n_multipoles = fmm_mat.src_tree.n_nodes * len(fmm_mat.surf) * fmm_mat.cfg.tensor_dim
+    out = np.zeros(n_out)
+    m_check = np.zeros(n_multipoles)
+    multipoles = np.zeros(n_multipoles)
+
+    fmm_mat.p2p_eval(out, input_vals)
+    fmm_mat.p2m_eval(m_check, input_vals)
+    fmm_mat.uc2e_eval(multipoles, m_check, 0)
+
+    for i in range(1, len(fmm_mat.m2m)):
+        m_check[:] = 0
+        fmm_mat.m2m_eval(m_check, multipoles, i)
+        fmm_mat.uc2e_eval(multipoles, m_check, i)
+
+    fmm_mat.m2p_eval(out, multipoles)
+    return out

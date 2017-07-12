@@ -81,7 +81,7 @@ struct FMMMat {
     MatrixFreeOp m2p;
     std::vector<MatrixFreeOp> m2m;
 
-    std::vector<std::vector<double>> uc2e_ops;
+    std::vector<double> uc2e_ops;
     std::vector<MatrixFreeOp> uc2e;
 
     FMMMat(Octree<dim> obs_tree, Octree<dim> src_tree, FMMConfig<dim> cfg,
@@ -95,8 +95,7 @@ struct FMMMat {
     void m2p_matvec(double* out, double* in);
     void uc2e_matvec(double* out, double* in, int level);
 
-    std::vector<double> p2p_eval(double* in);
-    std::vector<double> p2m_eval(double* in);
+    std::vector<double> m2m_eval(double* m_check);
     std::vector<double> m2p_eval(double* multipoles);
 };
 

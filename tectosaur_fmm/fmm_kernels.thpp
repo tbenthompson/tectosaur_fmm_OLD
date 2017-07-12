@@ -16,7 +16,7 @@ struct NBodyProblem {
 template <size_t dim>
 struct Kernel {
     std::function<void(const NBodyProblem<dim>&,KernelReal*)> f;
-    std::function<void(const NBodyProblem<dim>&,KernelReal*,KernelReal*)> f_mf;
+    std::function<void(const NBodyProblem<dim>&,KernelReal*,KernelReal*)> mf_f;
     int tensor_dim;
     std::string name;
 };

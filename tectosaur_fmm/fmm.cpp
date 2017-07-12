@@ -51,20 +51,23 @@ void wrap_dim(py::module& m) {
         })
         .def("root", &Octree<dim>::root)
         .def_readonly("nodes", &Octree<dim>::nodes)
-        .def_property_readonly("pts", [] (Octree<dim>& op) {
-            return make_array<double>(
-                {op.pts.size(), dim},
-                reinterpret_cast<double*>(op.pts.data())
-            );
-        })
-        .def_property_readonly("normals", [] (Octree<dim>& op) {
-            return make_array<double>(
-                {op.normals.size(), dim},
-                reinterpret_cast<double*>(op.normals.data())
-            );
-        })
         .def_readonly("orig_idxs", &Octree<dim>::orig_idxs)
-        .def_readonly("max_height", &Octree<dim>::max_height);
+        .def_readonly("max_height", &Octree<dim>::max_height)
+        .def_property_readonly("pts", [] (Octree<dim>& tree) {
+            return make_array<double>(
+                {tree.pts.size(), dim},
+                reinterpret_cast<double*>(tree.pts.data())
+            );
+        })
+        .def_property_readonly("normals", [] (Octree<dim>& tree) {
+            return make_array<double>(
+                {tree.normals.size(), dim},
+                reinterpret_cast<double*>(tree.normals.data())
+            );
+        })
+        .def_property_readonly("n_nodes", [] (Octree<dim>& o) {
+            return o.nodes.size();
+        });
 
     py::class_<FMMConfig<dim>>(m, "FMMConfig")
         .def("__init__", 
@@ -82,8 +85,8 @@ void wrap_dim(py::module& m) {
         .def_readonly("outer_r", &FMMConfig<dim>::outer_r)
         .def_readonly("order", &FMMConfig<dim>::order)
         .def_readonly("params", &FMMConfig<dim>::params)
-        .def("kernel_name", &FMMConfig<dim>::kernel_name)
-        .def("tensor_dim", &FMMConfig<dim>::tensor_dim);
+        .def_property_readonly("kernel_name", &FMMConfig<dim>::kernel_name)
+        .def_property_readonly("tensor_dim", &FMMConfig<dim>::tensor_dim);
 
     py::class_<FMMMat<dim>>(m, "FMMMat")
         .def_readonly("obs_tree", &FMMMat<dim>::obs_tree)
@@ -96,55 +99,66 @@ void wrap_dim(py::module& m) {
         .def_readonly("cfg", &FMMMat<dim>::cfg)
         .def_readonly("translation_surface_order", &FMMMat<dim>::translation_surface_order)
         .def_readonly("uc2e", &FMMMat<dim>::uc2e)
+        .def_property_readonly("uc2e_ops", [] (FMMMat<dim>& fmm) {
+            return make_array<double>(
+                {fmm.uc2e_ops.size()}, reinterpret_cast<double*>(fmm.uc2e_ops.data())
+            );
+        })
         .def_property_readonly("tensor_dim", &FMMMat<dim>::tensor_dim)
-        .def("p2p_eval", [] (FMMMat<dim>& m, NPArrayD v) {
-            auto* ptr = reinterpret_cast<double*>(v.request().ptr);
-            return array_from_vector(m.p2p_eval(ptr));
+        .def("p2p_eval", [] (FMMMat<dim>& m, NPArrayD out, NPArrayD in) {
+            auto* out_ptr = reinterpret_cast<double*>(out.request().ptr);
+            auto* in_ptr = reinterpret_cast<double*>(in.request().ptr);
+            m.p2p_matvec(out_ptr, in_ptr);
         })
-        .def("p2m_eval", [] (FMMMat<dim>& m, NPArrayD v) {
-            auto* ptr = reinterpret_cast<double*>(v.request().ptr);
-            return array_from_vector(m.p2m_eval(ptr));
+        .def("p2m_eval", [] (FMMMat<dim>& m, NPArrayD m_check, NPArrayD in) {
+            auto* m_check_ptr = reinterpret_cast<double*>(m_check.request().ptr);
+            auto* in_ptr = reinterpret_cast<double*>(in.request().ptr);
+            m.p2m_matvec(m_check_ptr, in_ptr);
         })
-        .def("m2p_eval", [] (FMMMat<dim>& m, NPArrayD multipoles) {
-            auto* ptr = reinterpret_cast<double*>(multipoles.request().ptr);
-            return array_from_vector(m.m2p_eval(ptr));
+        .def("m2p_eval", [] (FMMMat<dim>& m, NPArrayD out, NPArrayD multipoles) {
+            auto* out_ptr = reinterpret_cast<double*>(out.request().ptr);
+            auto* multipoles_ptr = reinterpret_cast<double*>(multipoles.request().ptr);
+            m.m2p_matvec(out_ptr, multipoles_ptr );
+        })
+        .def("m2m_eval",  [] (FMMMat<dim>& m, NPArrayD m_check, NPArrayD multipoles, int level) {
+            auto* m_check_ptr = reinterpret_cast<double*>(m_check.request().ptr);
+            auto* multipoles_ptr = reinterpret_cast<double*>(multipoles.request().ptr);
+            m.m2m_matvec(m_check_ptr, multipoles_ptr, level);
+        })
+        .def("uc2e_eval",  [] (FMMMat<dim>& m, NPArrayD multipoles, NPArrayD m_check, int level) {
+            auto* multipoles_ptr = reinterpret_cast<double*>(multipoles.request().ptr);
+            auto* m_check_ptr = reinterpret_cast<double*>(m_check.request().ptr);
+            m.uc2e_matvec(multipoles_ptr, m_check_ptr, level);
         });
 
     m.def("fmmmmmmm", &fmmmmmmm<dim>);
 
-    m.def("direct_eval", [](std::string k_name, NPArrayD obs_pts, NPArrayD obs_ns,
-                            NPArrayD src_pts, NPArrayD src_ns, NPArrayD params) {
-        check_shape<dim>(obs_pts);
-        check_shape<dim>(obs_ns);
-        check_shape<dim>(src_pts);
-        check_shape<dim>(src_ns);
-        auto K = get_by_name<dim>(k_name);
-        std::vector<double> out(K.tensor_dim * K.tensor_dim *
-                                obs_pts.request().shape[0] *
-                                src_pts.request().shape[0]);
-        K.f({as_ptr<std::array<double,dim>>(obs_pts), as_ptr<std::array<double,dim>>(obs_ns),
-           as_ptr<std::array<double,dim>>(src_pts), as_ptr<std::array<double,dim>>(src_ns),
-           obs_pts.request().shape[0], src_pts.request().shape[0],
-           as_ptr<double>(params)},
-          out.data());
-        return array_from_vector(out);
-    });
-
-    m.def("mf_direct_eval", [](std::string k_name, NPArrayD obs_pts, NPArrayD obs_ns,
-                            NPArrayD src_pts, NPArrayD src_ns, NPArrayD params, NPArrayD input) {
-        check_shape<dim>(obs_pts);
-        check_shape<dim>(obs_ns);
-        check_shape<dim>(src_pts);
-        check_shape<dim>(src_ns);
-        auto K = get_by_name<dim>(k_name);
-        std::vector<double> out(K.tensor_dim * obs_pts.request().shape[0]);
-        K.f_mf({as_ptr<std::array<double,dim>>(obs_pts), as_ptr<std::array<double,dim>>(obs_ns),
-           as_ptr<std::array<double,dim>>(src_pts), as_ptr<std::array<double,dim>>(src_ns),
-           obs_pts.request().shape[0], src_pts.request().shape[0],
-           as_ptr<double>(params)},
-          out.data(), as_ptr<double>(input));
-        return array_from_vector(out);
-    });
+    <%
+    direct_eval_data = [
+        ("",["","n_obs_dofs * n_src_dofs",""]),
+        ("mf_",[",NPArrayD input","n_obs_dofs",", as_ptr<double>(input)"])
+    ]
+    %>
+    % for name, extra in direct_eval_data:
+        m.def("${name}direct_eval", [](std::string k_name, NPArrayD obs_pts, NPArrayD obs_ns,
+                                NPArrayD src_pts, NPArrayD src_ns, NPArrayD params${extra[0]}) {
+            check_shape<dim>(obs_pts);
+            check_shape<dim>(obs_ns);
+            check_shape<dim>(src_pts);
+            check_shape<dim>(src_ns);
+            auto K = get_by_name<dim>(k_name);
+            int n_obs_dofs = K.tensor_dim * obs_pts.request().shape[0];
+            int n_src_dofs = K.tensor_dim * src_pts.request().shape[0];
+            (void)n_src_dofs;
+            std::vector<double> out(${extra[1]});
+            K.${name}f({as_ptr<std::array<double,dim>>(obs_pts), as_ptr<std::array<double,dim>>(obs_ns),
+               as_ptr<std::array<double,dim>>(src_pts), as_ptr<std::array<double,dim>>(src_ns),
+               obs_pts.request().shape[0], src_pts.request().shape[0],
+               as_ptr<double>(params)},
+              out.data()${extra[2]});
+            return array_from_vector(out);
+        });
+    % endfor
 }
 
 PYBIND11_PLUGIN(fmm) {

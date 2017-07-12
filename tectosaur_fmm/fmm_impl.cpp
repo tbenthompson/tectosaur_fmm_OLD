@@ -114,7 +114,7 @@ void interact_pts(const FMMConfig<dim>& cfg, double* out, double* in,
 
     double* out_val_start = &out[cfg.tensor_dim() * obs_pt_start];
     double* in_val_start = &in[cfg.tensor_dim() * src_pt_start];
-    cfg.kernel.f_mf(
+    cfg.kernel.mf_f(
         NBodyProblem<dim>{obs_pts, obs_ns, src_pts, src_ns, n_obs, n_src, cfg.params.data()},
         out_val_start, in_val_start
     );
@@ -189,77 +189,31 @@ template <size_t dim>
 void FMMMat<dim>::uc2e_matvec(double* out, double* in, int level) {
     int n_rows = cfg.tensor_dim() * surf.size();
     for (size_t i = 0; i < uc2e[level].src_n_idx.size(); i++) {
-        auto depth = src_tree.nodes[uc2e[level].src_n_idx[0]].depth;
-        auto& op = uc2e_ops[depth];
         auto node_idx = uc2e[level].src_n_idx[i];
+        auto depth = src_tree.nodes[node_idx].depth;
+        double* op = &uc2e_ops[depth * n_rows * n_rows];
         matrix_vector_product(
-            op.data(), n_rows, n_rows, 
+            op, n_rows, n_rows, 
             &in[node_idx * n_rows],
             &out[node_idx * n_rows]
         );
     }
 }
 
-template <typename T>
-void inplace_add_vecs(std::vector<T>& a, const std::vector<T>& b) {
-    for (size_t j = 0; j < a.size(); j++) {
-        a[j] += b[j];
-    }
-}
-
-template <typename T>
-void zero_vec(std::vector<T>& v) {
-    std::fill(v.begin(), v.end(), 0.0);
-}
-
-template <size_t dim>
-std::vector<double> FMMMat<dim>::p2p_eval(double* in) {
-    auto n_outputs = obs_tree.pts.size() * tensor_dim();
-    std::vector<double> out(n_outputs, 0.0);
-    p2p_matvec(out.data(), in);
-    return out;
-}
-
-template <size_t dim>
-std::vector<double> FMMMat<dim>::p2m_eval(double* in) {
-    auto n_multipoles = surf.size() * src_tree.nodes.size() * tensor_dim();
-    std::vector<double> m_check(n_multipoles, 0.0);
-    Timer t;
-    p2m_matvec(m_check.data(), in);
-    t.report("p2m");
-
-    std::vector<double> multipoles(n_multipoles, 0.0);
-    uc2e_matvec(multipoles.data(), m_check.data(), 0);
-    t.report("uc2e " + std::to_string(0));
-
-    for (size_t i = 1; i < m2m.size(); i++) {
-        zero_vec(m_check);
-        m2m_matvec(m_check.data(), multipoles.data(), i);
-        t.report("m2m " + std::to_string(i));
-        uc2e_matvec(multipoles.data(), m_check.data(), i);
-        t.report("uc2e " + std::to_string(i));
-    }
-    return multipoles;
-}
-
-template <size_t dim>
-std::vector<double> FMMMat<dim>::m2p_eval(double* multipoles) {
-    auto n_outputs = obs_tree.pts.size() * tensor_dim();
-    std::vector<double> out(n_outputs, 0.0);
-    m2p_matvec(out.data(), multipoles);
-    return out;
-}
-
 template <size_t dim>
 void build_uc2e(FMMMat<dim>& mat) {
-    mat.uc2e_ops.resize(mat.src_tree.max_height + 1);
+    int n_rows = mat.cfg.tensor_dim() * mat.surf.size();
+    mat.uc2e_ops.resize((mat.src_tree.max_height + 1) * n_rows * n_rows);
 #pragma omp parallel for
     for (int i = 0; i < mat.src_tree.max_height + 1; i++) {
         double width = mat.src_tree.root().bounds.width / std::pow(2.0, static_cast<double>(i));
         std::array<double,dim> center{};
         Cube<dim> bounds(center, width);
         auto pinv = c2e_solve(mat.surf, bounds, mat.cfg.outer_r, mat.cfg.inner_r, mat.cfg);
-        mat.uc2e_ops[i] = pinv;
+        double* op_start = &mat.uc2e_ops[i * n_rows * n_rows];
+        for (int j = 0; j < n_rows * n_rows; j++) {
+            op_start[j] = pinv[j];
+        }
     }
 }
 
