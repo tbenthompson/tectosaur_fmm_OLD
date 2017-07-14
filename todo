@@ -1,7 +1,13 @@
-optimize p2m
+optimize gpu kernels with shared memory access, some loop unrolling?, 
 
-optimize gpu kernels
+compare gpu fmm to gpu direct calculation
+for small problems, the main interaction traversal should mark whether a cells multipoles are ever used, then the downward pass will propagate that information allowing p2m, and m2m kernels to be pruned.
+use homogeneity in the p2m? p2m is not really a bottleneck at all though, so... why?
 
+since i'm not using the relative positions of cells, i could use shrinked octree node bounds.
+check if the optimal speed is achieved when cells are the same size as the order, or maybe they should be larger? this is going to depend on the exact other efficiency factors, so i should optimize first!
+
+gpu sorting: vexcl and boost compute both do it, also clogs.
 
 
 
@@ -14,8 +20,6 @@ use FMM for okada -- just try it out first, make sure its accurate.
 
 
 read about the implementation of the high-performance volumetric integration tools.
-
 reading exafmm stuff is interesting: https://github.com/exafmm/exafmm-alpha/blob/master/gpu/traversal.h
 
-why didn't the fft stuff work for the m2l in the past?
-https://stackoverflow.com/questions/18384054/what-are-the-downsides-of-convolution-by-fft-compared-to-realspace-convolution
+use homogeneity and symmetry?

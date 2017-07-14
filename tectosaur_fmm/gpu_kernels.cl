@@ -122,17 +122,59 @@ void p2p_kernel_${K.name}${K.spatial_dim}(
 
     ${K.constants_code}
 
-    for (int i = obs_start + worker_idx; i < obs_end; i += ${n_workers_per_block}) {
-        ${load_pts(K, "obs", "i")}
-        ${init_sum(K)}
+    % if K.needs_srcn:
+    __local Real sh_src_ns[${K.spatial_dim} * ${n_workers_per_block}];
+    % endif
+    __local Real sh_src_pts[${K.spatial_dim} * ${n_workers_per_block}];
+    __local Real sh_input[${K.tensor_dim} * ${n_workers_per_block}];
 
-        for (int j = src_start; j < src_end; j++) {
-            ${load_pts(K, "src", "j")}
-            ${load_input(K, "j")}
-            ${call_kernel(K, True)}
+
+    for (int chunk_start = src_start;
+            chunk_start < src_end;
+            chunk_start += ${n_workers_per_block}) 
+    {
+        % for d in range(K.spatial_dim):
+            sh_src_pts[worker_idx * ${K.spatial_dim} + ${d}] = 
+                src_pts[(chunk_start + worker_idx) * ${K.spatial_dim} + ${d}];
+            % if K.needs_srcn:
+                sh_src_ns[worker_idx * ${K.spatial_dim} + ${d}] = 
+                    src_ns[(chunk_start + worker_idx) * ${K.spatial_dim} + ${d}];
+            % endif
+        % endfor
+
+        % for d in range(K.tensor_dim):
+            sh_input[worker_idx * ${K.tensor_dim} + ${d}] =
+                in[(chunk_start + worker_idx) * ${K.tensor_dim} + ${d}];
+        % endfor
+
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        for (int i = obs_start + worker_idx; i < obs_end; i += ${n_workers_per_block}) {
+            ${load_pts(K, "obs", "i")}
+            ${init_sum(K)}
+
+            for (int chunk_j = 0;
+                    (chunk_j < ${n_workers_per_block}) && 
+                    (chunk_start + chunk_j < src_end);
+                    chunk_j++) 
+            {
+                % for d in range(K.spatial_dim):
+                    Real src${dn(d)} = sh_src_pts[chunk_j * ${K.spatial_dim} + ${d}];
+                    % if K.needs_srcn:
+                        Real nsrc${dn(d)} = sh_src_ns[chunk_j * ${K.spatial_dim} + ${d}];
+                    % endif
+                % endfor
+                % for d in range(K.tensor_dim):
+                    Real in${dn(d)} = sh_input[chunk_j * ${K.tensor_dim} + ${d}];
+                % endfor
+
+                ${call_kernel(K, True)}
+            }
+
+            ${output_sum(K, "i")}
         }
 
-        ${output_sum(K, "i")}
+        barrier(CLK_LOCAL_MEM_FENCE);
     }
 }
 </%def>
@@ -155,17 +197,49 @@ void m2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
 
     ${K.constants_code}
 
-    for (int i = obs_start + worker_idx; i < obs_end; i += ${n_workers_per_block}) {
-        ${load_pts(K, "obs", "i")}
-        ${init_sum(K)}
+    __local Real sh_src_ns[${K.spatial_dim} * ${n_workers_per_block}];
+    __local Real sh_input[${K.tensor_dim} * ${n_workers_per_block}];
 
-        for (int j = 0; j < n_surf; j++) {
-            ${load_surf_pts(K, "src", "src", "j")}
-            ${load_input(K, "src_idx * n_surf + j")}
-            ${call_kernel(K, False)}
+
+    for (int chunk_start = 0;
+            chunk_start < n_surf;
+            chunk_start += ${n_workers_per_block}) 
+    {
+
+        barrier(CLK_LOCAL_MEM_FENCE);
+        % for d in range(K.spatial_dim):
+            sh_src_ns[worker_idx * ${K.spatial_dim} + ${d}] = 
+                surf[(chunk_start + worker_idx) * ${K.spatial_dim} + ${d}];
+        % endfor
+
+        % for d in range(K.tensor_dim):
+            sh_input[worker_idx * ${K.tensor_dim} + ${d}] =
+                in[(src_idx * n_surf + chunk_start + worker_idx) * ${K.tensor_dim} + ${d}];
+        % endfor
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        for (int i = obs_start + worker_idx; i < obs_end; i += ${n_workers_per_block}) {
+            ${load_pts(K, "obs", "i")}
+            ${init_sum(K)}
+
+            for (int chunk_j = 0;
+                    (chunk_j < ${n_workers_per_block}) && 
+                    (chunk_start + chunk_j < n_surf);
+                    chunk_j++) 
+            {
+                % for d in range(K.spatial_dim):
+                    Real nsrc${dn(d)} = sh_src_ns[chunk_j * ${K.spatial_dim} + ${d}];
+                    Real src${dn(d)} = src_surf_radius * nsrc${dn(d)} + src_center${dn(d)};
+                % endfor
+                % for d in range(K.tensor_dim):
+                    Real in${dn(d)} = sh_input[chunk_j * ${K.tensor_dim} + ${d}];
+                % endfor
+
+                ${call_kernel(K, False)}
+            }
+
+            ${output_sum(K, "i")}
         }
-
-        ${output_sum(K, "i")}
     }
 }
 </%def>

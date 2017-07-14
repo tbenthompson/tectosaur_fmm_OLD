@@ -19,7 +19,7 @@ if 'profile' not in __builtins__:
         return f
 
 gpu_cfg = dict(
-    n_workers_per_block = 64
+    n_workers_per_block = 32
 )
 
 def get_gpu_module():
@@ -56,11 +56,11 @@ def report_p2p_vs_m2p(fmm_mat):
     direct_i = len(fmm_mat.obs_tree.pts) * len(fmm_mat.src_tree.pts)
 
     print('compression factor: ' + str(tree_i / direct_i))
-    print('total tree interactions: ' + str(tree_i))
-    print('total p2p interactions: ' + str(p2p_i))
-    print('total p2m interactions: ' + str(p2m_i))
-    print('total m2m interactions: ' + str(m2m_i))
-    print('total m2p interactions: ' + str(m2p_i))
+    print('total tree interactions: %e' % tree_i)
+    print('total p2p interactions: %e' % p2p_i)
+    print('total p2m interactions: %e' % p2m_i)
+    print('total m2m interactions: %e' % m2m_i)
+    print('total m2p interactions: %e' % m2p_i)
 
 def data_to_gpu(fmm_mat, input_vals):
     gd = dict()
@@ -153,7 +153,6 @@ def gpu_m2p(fmm_mat, gd, uc2e_ev):
         return None
 
 
-@profile
 def gpu_p2m(fmm_mat, gd):
     p2m = getattr(get_gpu_module(), 'p2m_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
     n_p2m = gd['p2m_parent_n_start'].shape[0]
@@ -210,26 +209,42 @@ def gpu_uc2e(fmm_mat, gd, level, m2m_ev):
     else:
         return None
 
-@profile
-def eval_ocl(fmm_mat, input_vals):
-    gpu_data = data_to_gpu(fmm_mat, input_vals)
+def print_timing(p2p_ev, m2m_evs, uc2e_evs, m2p_ev):
+    def get_time(ev):
+        return (ev.profile.end - ev.profile.start) * 1e-9
+
+    p2p_t = get_time(p2p_ev[0])
+    m2p_t = get_time(m2p_ev[0])
+    m2m_t = sum([get_time(level[0]) for level in m2m_evs])
+    uc2e_t = sum([get_time(level[0]) for level in m2m_evs])
+    print('p2p took ' + str(p2p_t))
+    print('m2p took ' + str(m2p_t))
+    print('m2m took ' + str(m2m_t))
+    print('uc2e took ' + str(uc2e_t))
+
+def eval_ocl(fmm_mat, input, gpu_data = None):
+    if gpu_data is None:
+        gpu_data = data_to_gpu(fmm_mat, input)
 
     p2p_ev = gpu_p2p(fmm_mat, gpu_data)
 
-    p2m_ev = gpu_p2m(fmm_mat, gpu_data)
-    uc2e_ev = gpu_uc2e(fmm_mat, gpu_data, 0, p2m_ev)
+    m2m_evs = []
+    uc2e_evs = []
+    m2m_evs.append(gpu_p2m(fmm_mat, gpu_data))
+    uc2e_evs.append(gpu_uc2e(fmm_mat, gpu_data, 0, m2m_evs[0]))
 
     for i in range(1, len(fmm_mat.m2m)):
-        gpu_data['m_check'][:] = 0
-        m2m_ev = gpu_m2m(fmm_mat, gpu_data, i, uc2e_ev)
-        uc2e_ev = gpu_uc2e(fmm_mat, gpu_data, i, m2m_ev)
+        m2m_evs.append(gpu_m2m(fmm_mat, gpu_data, i, uc2e_evs[i - 1]))
+        uc2e_evs.append(gpu_uc2e(fmm_mat, gpu_data, i, m2m_evs[i]))
 
-    m2p_ev = gpu_m2p(fmm_mat, gpu_data, uc2e_ev)
+    m2p_ev = gpu_m2p(fmm_mat, gpu_data, uc2e_evs[-1])
     if m2p_ev is not None:
         m2p_ev[0].wait()
 
     p2p_ev[0].wait()
     retval = gpu_data['out'].get()
+
+    print_timing(p2p_ev, m2m_evs, uc2e_evs, m2p_ev)
 
     return retval
 
