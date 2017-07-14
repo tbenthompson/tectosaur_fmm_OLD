@@ -18,13 +18,17 @@ if 'profile' not in __builtins__:
     def profile(f):
         return f
 
+gpu_cfg = dict(
+    n_workers_per_block = 64
+)
+
 def get_gpu_module():
     global gpu_module
     if gpu_module is None:
         gpu_module = gpu.load_gpu(
             'gpu_kernels.cl',
             tmpl_dir = tectosaur_fmm.source_dir,
-            no_caching = True
+            tmpl_args = gpu_cfg
         )
     return gpu_module
 
@@ -117,29 +121,36 @@ def data_to_gpu(fmm_mat, input_vals):
 def gpu_p2p(fmm_mat, gd):
     p2p = getattr(get_gpu_module(), 'p2p_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
     n_p2p = gd['p2p_obs_n_start'].shape[0]
-    p2p(
-        gpu.gpu_queue, (n_p2p,), None,
+    return [p2p(
+        gpu.gpu_queue,
+        (n_p2p * gpu_cfg['n_workers_per_block'],),
+        (gpu_cfg['n_workers_per_block'],),
         gd['out'].data, gd['in'].data,
         np.int32(n_p2p), gd['p2p_obs_n_start'].data, gd['p2p_obs_n_end'].data,
         gd['p2p_src_n_start'].data, gd['p2p_src_n_end'].data,
         gd['obs_pts'].data, gd['obs_normals'].data,
         gd['src_pts'].data, gd['src_normals'].data,
         gd['params'].data
-    )
+    )]
 
-def gpu_m2p(fmm_mat, gd):
+def gpu_m2p(fmm_mat, gd, uc2e_ev):
     m2p = getattr(get_gpu_module(), 'm2p_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
     n_m2p = gd['m2p_obs_n_start'].shape[0]
     if n_m2p > 0:
-        m2p(
-            gpu.gpu_queue, (n_m2p,), None,
+        return [m2p(
+            gpu.gpu_queue,
+            (n_m2p * gpu_cfg['n_workers_per_block'],),
+            (gpu_cfg['n_workers_per_block'],),
             gd['out'].data, gd['multipoles'].data,
             np.int32(n_m2p), gd['m2p_obs_n_start'].data, gd['m2p_obs_n_end'].data,
-            gd['m2p_src_n_idx'].data, np.int32(gd['surf'].shape[0]), gd['surf'].data,
+            gd['m2p_src_n_idx'].data, np.int32(gd['n_surf_pts']), gd['surf'].data,
             gd['src_n_center'].data, gd['src_n_width'].data, float_type(fmm_mat.cfg.inner_r),
             gd['obs_pts'].data, gd['obs_normals'].data,
-            gd['params'].data
-        )
+            gd['params'].data,
+            wait_for = uc2e_ev
+        )]
+    else:
+        return None
 
 
 @profile
@@ -147,64 +158,77 @@ def gpu_p2m(fmm_mat, gd):
     p2m = getattr(get_gpu_module(), 'p2m_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
     n_p2m = gd['p2m_parent_n_start'].shape[0]
     if n_p2m > 0:
-        p2m(
-            gpu.gpu_queue, (n_p2m,), None,
+        return [p2m(
+            gpu.gpu_queue,
+            (n_p2m * gpu_cfg['n_workers_per_block'],),
+            (gpu_cfg['n_workers_per_block'],),
             gd['m_check'].data, gd['in'].data,
             np.int32(n_p2m), gd['p2m_parent_n_start'].data, gd['p2m_parent_n_end'].data,
-            gd['p2m_parent_n_idx'].data, np.int32(gd['surf'].shape[0]), gd['surf'].data,
+            gd['p2m_parent_n_idx'].data, np.int32(gd['n_surf_pts']), gd['surf'].data,
             gd['src_n_center'].data, gd['src_n_width'].data, float_type(fmm_mat.cfg.outer_r),
             gd['src_pts'].data, gd['src_normals'].data,
             gd['params'].data
-        )
+        )]
+    else:
+        return None
 
-def gpu_m2m(fmm_mat, gd, level):
+def gpu_m2m(fmm_mat, gd, level, uc2e_ev):
     m2m = getattr(get_gpu_module(), 'm2m_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
     n_m2m = gd['m2m_parent_n_idx'][level].shape[0]
     if n_m2m > 0:
-        m2m(
-            gpu.gpu_queue, (n_m2m,), None,
+        return [m2m(
+            gpu.gpu_queue,
+            (n_m2m * gpu_cfg['n_workers_per_block'],),
+            (gpu_cfg['n_workers_per_block'],),
             gd['m_check'].data, gd['multipoles'].data,
             np.int32(n_m2m), gd['m2m_parent_n_idx'][level].data, gd['m2m_child_n_idx'][level].data,
-            np.int32(gd['n_surf_dofs']), gd['surf'].data,
+            np.int32(gd['n_surf_pts']), gd['surf'].data,
             gd['src_n_center'].data, gd['src_n_width'].data,
             float_type(fmm_mat.cfg.inner_r), float_type(fmm_mat.cfg.outer_r),
-            gd['params'].data
-        )
+            gd['params'].data,
+            wait_for = uc2e_ev
+        )]
+    else:
+        return None
 
-def gpu_uc2e(fmm_mat, gd, level):
+def gpu_uc2e(fmm_mat, gd, level, m2m_ev):
     uc2e = getattr(get_gpu_module(), 'uc2e_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
     n_uc2e = gd['uc2e_node_n_idx'][level].shape[0]
     n_uc2e_rows = gd['tensor_dim'] * gd['n_surf_pts']
     if n_uc2e > 0:
-        uc2e(
-            gpu.gpu_queue, (n_uc2e,), None,
+        return [uc2e(
+            gpu.gpu_queue,
+            (n_uc2e * gpu_cfg['n_workers_per_block'],),
+            (gpu_cfg['n_workers_per_block'],),
             gd['multipoles'].data, gd['m_check'].data,
             np.int32(n_uc2e), np.int32(n_uc2e_rows),
             gd['uc2e_node_n_idx'][level].data,
             gd['uc2e_node_depth'].data,
-            gd['uc2e_ops'].data
-        )
+            gd['uc2e_ops'].data,
+            wait_for = m2m_ev
+        )]
+    else:
+        return None
 
 @profile
 def eval_ocl(fmm_mat, input_vals):
     gpu_data = data_to_gpu(fmm_mat, input_vals)
 
-    gpu_p2m(fmm_mat, gpu_data)
-    gpu_uc2e(fmm_mat, gpu_data, 0)
+    p2p_ev = gpu_p2p(fmm_mat, gpu_data)
+
+    p2m_ev = gpu_p2m(fmm_mat, gpu_data)
+    uc2e_ev = gpu_uc2e(fmm_mat, gpu_data, 0, p2m_ev)
 
     for i in range(1, len(fmm_mat.m2m)):
         gpu_data['m_check'][:] = 0
-#
-#         multipoles = gpu_data['multipoles'].get()
-#         m_check = np.zeros(gpu_data['n_multipoles'])
-#         fmm_mat.m2m_eval(m_check, multipoles, i)
-#         gpu_data['m_check'] = gpu.to_gpu(multipoles, float_type)
+        m2m_ev = gpu_m2m(fmm_mat, gpu_data, i, uc2e_ev)
+        uc2e_ev = gpu_uc2e(fmm_mat, gpu_data, i, m2m_ev)
 
-        gpu_m2m(fmm_mat, gpu_data, i)
-        gpu_uc2e(fmm_mat, gpu_data, i)
+    m2p_ev = gpu_m2p(fmm_mat, gpu_data, uc2e_ev)
+    if m2p_ev is not None:
+        m2p_ev[0].wait()
 
-    gpu_p2p(fmm_mat, gpu_data)
-    gpu_m2p(fmm_mat, gpu_data)
+    p2p_ev[0].wait()
     retval = gpu_data['out'].get()
 
     return retval

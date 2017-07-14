@@ -16,3 +16,5 @@ oprofile_data
 kernels.pkl
 *.npy
 *.lprof
+
+!tests/golden_masters/*.npy

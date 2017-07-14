@@ -15,19 +15,22 @@ from tectosaur.kernels import fmm_kernels
 // I was worried this would cause a significant decrease in performance, but
 // it doesn't seem to cause any problems. Probably there are so few conflicts
 // that it's totally fine.
-void atomic_fadd(volatile __global Real *addr, Real val) {
-    union {
-        uint u;
-        Real f;
+float atomic_fadd(volatile __global float *addr, float val)
+{
+    union{
+        unsigned int u32;
+        float        f32;
     } next, expected, current;
-    current.f = *addr;
-    do {
-        expected.f = current.f;
-        next.f = expected.f + val;
-        current.u = atomic_cmpxchg(
-            (volatile __global uint *)addr, expected.u, next.u
+    current.f32 = *addr;
+    do{
+        expected.f32 = current.f32;
+        next.f32 = expected.f32 + val;
+        current.u32 = atomic_cmpxchg(
+            (volatile __global unsigned int *)addr, 
+            expected.u32, next.u32
         );
-    } while(current.u != expected.u);
+    } while( current.u32 != expected.u32 );
+    return current.f32;
 }
 
 <%def name="load_bounds(K, node_name, type, R)">
@@ -56,11 +59,9 @@ void atomic_fadd(volatile __global Real *addr, Real val) {
     % endfor
 </%def>
 
-//TODO: Is kahan summation necessary here?
 <%def name="init_sum(K)">
     % for d in range(K.tensor_dim):
-    Real kahansum${dn(d)} = 0.0;
-    Real kahantemp${dn(d)} = 0.0;
+    Real sum${dn(d)} = 0.0;
     % endfor
 </%def>
 
@@ -79,23 +80,15 @@ void atomic_fadd(volatile __global Real *addr, Real val) {
     }
     % endif
 
-    % for d in range(K.spatial_dim):
-        Real sum${dn(d)} = 0.0;
-    % endfor
     ${K.vector_code}
-    % for d in range(K.tensor_dim):
-        {
-            Real y = sum${dn(d)} - kahantemp${dn(d)};
-            Real t = kahansum${dn(d)} + y;
-            kahantemp${dn(d)} = (t - kahansum${dn(d)}) - y;
-            kahansum${dn(d)} = t;
-        }
-    % endfor
 </%def>
 
 <%def name="output_sum(K, out_idx)">
     % for d in range(K.tensor_dim):
-    atomic_fadd(&out[(${out_idx}) * ${K.tensor_dim} + ${d}], kahansum${dn(d)} + kahantemp${dn(d)});
+    {
+        __global Real* dest = &out[(${out_idx}) * ${K.tensor_dim} + ${d}];
+        atomic_fadd(dest, sum${dn(d)});
+    }
     % endfor
 </%def>
 
@@ -105,16 +98,23 @@ void atomic_fadd(volatile __global Real *addr, Real val) {
     % endfor
 </%def>
 
+<%def name="get_block_idx()">
+    const int global_idx = get_global_id(0); 
+    const int worker_idx = get_local_id(0);
+    const int block_idx = (global_idx - worker_idx) / ${n_workers_per_block};
+</%def>
+
 <%def name="p2p_kernel(K)">
 __kernel
-void p2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
-        int n_blocks,
+void p2p_kernel_${K.name}${K.spatial_dim}(
+        __global Real* out, __global Real* in, int n_blocks,
         __global int* obs_n_start, __global int* obs_n_end,
         __global int* src_n_start, __global int* src_n_end,
         __global Real* obs_pts, __global Real* obs_ns,
         __global Real* src_pts, __global Real* src_ns, __global Real* params)
 {
-    const int block_idx = get_global_id(0); 
+    ${get_block_idx()}
+
     int obs_start = obs_n_start[block_idx];
     int obs_end = obs_n_end[block_idx];
     int src_start = src_n_start[block_idx];
@@ -122,7 +122,7 @@ void p2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
 
     ${K.constants_code}
 
-    for (int i = obs_start; i < obs_end; i++) {
+    for (int i = obs_start + worker_idx; i < obs_end; i += ${n_workers_per_block}) {
         ${load_pts(K, "obs", "i")}
         ${init_sum(K)}
 
@@ -141,11 +141,12 @@ void p2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
 __kernel
 void m2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
         int n_blocks, __global int* obs_n_start, __global int* obs_n_end,
-        __global int* src_n_idx, int multipoles_per_cell, __global Real* surf,
+        __global int* src_n_idx, int n_surf, __global Real* surf,
         __global Real* src_n_center, __global Real* src_n_width, Real inner_r,
         __global Real* obs_pts, __global Real* obs_ns, __global Real* params)
 {
-    const int block_idx = get_global_id(0);
+    ${get_block_idx()}
+
     int obs_start = obs_n_start[block_idx];
     int obs_end = obs_n_end[block_idx];
     int src_idx = src_n_idx[block_idx];
@@ -154,13 +155,13 @@ void m2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
 
     ${K.constants_code}
 
-    for (int i = obs_start; i < obs_end; i++) {
+    for (int i = obs_start + worker_idx; i < obs_end; i += ${n_workers_per_block}) {
         ${load_pts(K, "obs", "i")}
         ${init_sum(K)}
 
-        for (int j = 0; j < multipoles_per_cell; j++) {
+        for (int j = 0; j < n_surf; j++) {
             ${load_surf_pts(K, "src", "src", "j")}
-            ${load_input(K, "src_idx * multipoles_per_cell + j")}
+            ${load_input(K, "src_idx * n_surf + j")}
             ${call_kernel(K, False)}
         }
 
@@ -173,11 +174,12 @@ void m2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
 __kernel
 void p2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
         int n_blocks, __global int* parent_n_start, __global int* parent_n_end,
-        __global int* parent_n_idx, int multipoles_per_cell, __global Real* surf,
+        __global int* parent_n_idx, int n_surf, __global Real* surf,
         __global Real* src_n_center, __global Real* src_n_width, Real outer_r,
         __global Real* src_pts, __global Real* src_ns, __global Real* params)
 {
-    const int block_idx = get_global_id(0);
+    ${get_block_idx()}
+
     int src_start = parent_n_start[block_idx];
     int src_end = parent_n_end[block_idx];
     int parent_idx = parent_n_idx[block_idx];
@@ -186,7 +188,7 @@ void p2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
 
     ${K.constants_code}
 
-    for (int i = 0; i < multipoles_per_cell; i++) {
+    for (int i = worker_idx; i < n_surf; i += ${n_workers_per_block}) {
         ${load_surf_pts(K, "obs", "parent", "i")}
         ${init_sum(K)}
 
@@ -196,7 +198,7 @@ void p2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
             ${call_kernel(K, False)}
         }
 
-        ${output_sum(K, "parent_idx * multipoles_per_cell + i")}
+        ${output_sum(K, "parent_idx * n_surf + i")}
     }
 }
 </%def>
@@ -205,11 +207,12 @@ void p2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
 __kernel
 void m2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
         int n_blocks, __global int* parent_n_idx, __global int* child_n_idx,
-        int multipoles_per_cell, __global Real* surf,
+        int n_surf, __global Real* surf,
         __global Real* src_n_center, __global Real* src_n_width,
         Real inner_r, Real outer_r, __global Real* params)
 {
-    const int block_idx = get_global_id(0);
+    ${get_block_idx()}
+
     int parent_idx = parent_n_idx[block_idx];
     int child_idx = child_n_idx[block_idx];
 
@@ -218,17 +221,17 @@ void m2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
 
     ${K.constants_code}
 
-    for (int i = 0; i < multipoles_per_cell; i++) {
+    for (int i = worker_idx; i < n_surf; i += ${n_workers_per_block}) {
         ${load_surf_pts(K, "obs", "parent", "i")}
         ${init_sum(K)}
 
-        for (int j = 0; j < multipoles_per_cell; j++) {
+        for (int j = 0; j < n_surf; j++) {
             ${load_surf_pts(K, "src", "child", "j")}
-            ${load_input(K, "child_idx * multipoles_per_cell + j")}
+            ${load_input(K, "child_idx * n_surf + j")}
             ${call_kernel(K, False)}
         }
 
-        ${output_sum(K, "parent_idx * multipoles_per_cell + i")}
+        ${output_sum(K, "parent_idx * n_surf + i")}
     }
 }
 </%def>
@@ -239,11 +242,12 @@ void uc2e_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in
         int n_blocks, int n_rows, __global int* node_idx, __global int* node_depth,
         __global Real* ops)
 {
-    const int block_idx = get_global_id(0);
+    ${get_block_idx()}
+
     int n_idx = node_idx[block_idx];
     __global Real* op_start = &ops[node_depth[n_idx] * n_rows * n_rows];
 
-    for (int i = 0; i < n_rows; i++) {
+    for (int i = worker_idx; i < n_rows; i += ${n_workers_per_block}) {
         Real sum = 0.0;
         for (int j = 0; j < n_rows; j++) {
             sum += op_start[i * n_rows + j] * in[n_idx * n_rows + j];
