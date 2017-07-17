@@ -35,6 +35,29 @@ std::vector<PtNormal<dim>> combine_pts_normals(std::array<double,dim>* pts,
 }
 
 template <size_t dim>
+Cube<dim> bounding_box(PtNormal<dim>* pts, size_t n_pts) {
+    std::array<double,dim> center_of_mass{};
+    for (size_t i = 0; i < n_pts; i++) {
+        for (size_t d = 0; d < dim; d++) {
+            center_of_mass[d] += pts[i].pt[d];
+        }
+    }
+    for (size_t d = 0; d < dim; d++) {
+        center_of_mass[d] /= n_pts;
+    }
+
+    double max_width = 0.0;
+    for (size_t i = 0; i < n_pts; i++) {
+        for (size_t d = 0; d < dim; d++) {
+            max_width = std::max(max_width, fabs(pts[i].pt[d] - center_of_mass[d]));
+        }
+    }
+
+    return {center_of_mass, max_width};
+}
+
+
+template <size_t dim>
 Octree<dim>::Octree(std::array<double,dim>* in_pts, std::array<double,dim>* in_normals,
             size_t n_pts, size_t n_per_cell):
     pts(n_pts),
@@ -51,7 +74,7 @@ Octree<dim>::Octree(std::array<double,dim>* in_pts, std::array<double,dim>* in_n
     // allocating 8 * (n / n_per_cell)
     nodes.reserve(2 * n_leaves);
 
-    auto bounds = bounding_box(in_pts, n_pts);
+    auto bounds = bounding_box(pts_normals.data(), n_pts);
     add_node(0, n_pts, n_per_cell, 0, bounds, pts_normals);
 
     max_height = nodes[0].height;
@@ -76,8 +99,13 @@ size_t Octree<dim>::add_node(size_t start, size_t end,
         int max_child_height = 0;
         for (size_t octant = 0; octant < OctreeNode<dim>::split; octant++) {
             auto child_bounds = get_subcell(bounds, make_child_idx<dim>(octant));
+            auto child_start = start + splits[octant];
+            auto child_end = start + splits[octant + 1];
+            // TODO: Should we use adaptive bounds?
+            // auto child_n_pts = child_end - child_start;
+            // auto child_bounds = bounding_box(&temp_pts[child_start], child_n_pts);
             auto child_node_idx = add_node(
-                start + splits[octant], start + splits[octant + 1],
+                child_start, child_end,
                 n_per_cell, depth + 1, child_bounds, temp_pts
             );
             nodes[n_idx].children[octant] = child_node_idx;
@@ -87,6 +115,9 @@ size_t Octree<dim>::add_node(size_t start, size_t end,
     }
     return n_idx;
 }
+
+template Cube<2> bounding_box(PtNormal<2>* pts, size_t n_pts);
+template Cube<3> bounding_box(PtNormal<3>* pts, size_t n_pts);
 
 template std::vector<PtNormal<2>> combine_pts_normals(std::array<double,2>* pts,
         std::array<double,2>* normals, size_t n_pts);

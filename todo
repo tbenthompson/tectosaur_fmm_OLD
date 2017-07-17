@@ -1,25 +1,26 @@
-optimize gpu kernels with shared memory access, some loop unrolling?, 
-
-compare gpu fmm to gpu direct calculation
-for small problems, the main interaction traversal should mark whether a cells multipoles are ever used, then the downward pass will propagate that information allowing p2m, and m2m kernels to be pruned.
-use homogeneity in the p2m? p2m is not really a bottleneck at all though, so... why?
-
-since i'm not using the relative positions of cells, i could use shrinked octree node bounds.
-check if the optimal speed is achieved when cells are the same size as the order, or maybe they should be larger? this is going to depend on the exact other efficiency factors, so i should optimize first!
-
-gpu sorting: vexcl and boost compute both do it, also clogs.
-
-
+implement a opencl lock so that i can use doubles.
+there's something weird where error gets worse with higher orders in tests/benchmark.py not sure what's up there!
+ideas -- something with the ill conditioned C2E inversion, change rcond in the qr_pseudoinverse
 
 move fmm_integral_op into this package
-
 use FMM for okada -- just try it out first, make sure its accurate.
-
-
-
-
-
 read about the implementation of the high-performance volumetric integration tools.
-reading exafmm stuff is interesting: https://github.com/exafmm/exafmm-alpha/blob/master/gpu/traversal.h
+
+get rid of the error about Wstrict-prototypes: https://stackoverflow.com/questions/8106258/cc1plus-warning-command-line-option-wstrict-prototypes-is-valid-for-ada-c-o
+
+
+
+
+
+
+
+
+
+NOT NOW:
+for small problems, the main interaction traversal should mark whether a cells multipoles are ever used, then the downward pass will propagate that information allowing p2m, and m2m kernels to be pruned.
+pruning will allow fmm to be faster in all cases.
 
 use homogeneity and symmetry?
+use homogeneity in the p2m, so that cells can be any size and I could go back to using a kdtree or other data structure, so long as all cells have spherical bounds.  since i'm not using the relative positions of cells, i could use shrinked octree node bounds.
+
+fast tree construction?  gpu sorting of morton z-curve values: vexcl and boost compute both do it, also clogs.

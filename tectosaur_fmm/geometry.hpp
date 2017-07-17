@@ -43,28 +43,6 @@ struct Cube {
 };
 
 template <size_t dim>
-Cube<dim> bounding_box(std::array<double,dim>* pts, size_t n_pts) {
-    std::array<double,dim> center_of_mass{};
-    for (size_t i = 0; i < n_pts; i++) {
-        for (size_t d = 0; d < dim; d++) {
-            center_of_mass[d] += pts[i][d];
-        }
-    }
-    for (size_t d = 0; d < dim; d++) {
-        center_of_mass[d] /= n_pts;
-    }
-
-    double max_width = 0.0;
-    for (size_t i = 0; i < n_pts; i++) {
-        for (size_t d = 0; d < dim; d++) {
-            max_width = std::max(max_width, fabs(pts[i][d] - center_of_mass[d]));
-        }
-    }
-
-    return {center_of_mass, max_width};
-}
-
-template <size_t dim>
 std::array<size_t,dim> make_child_idx(size_t i) 
 {
     std::array<size_t,dim> child_idx;

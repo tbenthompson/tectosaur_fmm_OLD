@@ -26,10 +26,8 @@ void m2m(FMMMat<dim>& mat, const OctreeNode<dim>& parent_n, const OctreeNode<dim
     mat.m2m[parent_n.height].insert(parent_n, child_n);
 }
 
-int traverse_touches = 0;
 template <size_t dim>
 void traverse(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<dim>& src_n) {
-    traverse_touches++;
     auto r_src = src_n.bounds.R();
     auto r_obs = obs_n.bounds.R();
     auto sep = hypot(sub(obs_n.bounds.center, src_n.bounds.center));
@@ -75,10 +73,8 @@ void c2e(FMMMat<dim>& mat, const OctreeNode<dim>& node) {
     mat.uc2e[node.height].insert(node, node);
 }
 
-int up_collect_touches = 0;
 template <size_t dim>
 void up_collect(FMMMat<dim>& mat, const OctreeNode<dim>& src_n) {
-    up_collect_touches++;
     c2e(mat, src_n);
     if (src_n.is_leaf) {
         p2m(mat, src_n);
@@ -228,14 +224,9 @@ FMMMat<dim> fmmmmmmm(const Octree<dim>& obs_tree, const Octree<dim>& src_tree,
     mat.m2m.resize(mat.src_tree.max_height + 1);
     mat.uc2e.resize(mat.src_tree.max_height + 1);
 
-    Timer t;
     build_uc2e(mat);
-    t.report("build_uc2e");
     up_collect(mat, mat.src_tree.root());
-    t.report("up_collect");
     traverse(mat, mat.obs_tree.root(), mat.src_tree.root());
-    t.report("traverse");
-    std::cout << traverse_touches << " " << up_collect_touches << std::endl;
 
     return mat;
 }

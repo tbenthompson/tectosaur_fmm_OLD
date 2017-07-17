@@ -35,6 +35,9 @@ std::vector<PtNormal<dim>> combine_pts_normals(std::array<double,dim>* pts,
         std::array<double,dim>* normals, size_t n_pts);
 
 template <size_t dim>
+Cube<dim> bounding_box(PtNormal<dim>* pts, size_t n_pts);
+
+template <size_t dim>
 struct Octree {
     std::vector<std::array<double,dim>> pts;
     std::vector<std::array<double,dim>> normals;

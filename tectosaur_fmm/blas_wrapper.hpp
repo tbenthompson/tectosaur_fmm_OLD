@@ -49,4 +49,4 @@ struct BlockSparseMat {
     size_t get_nnz() { return vals.size(); }
 };
 
-std::vector<double> qr_pseudoinverse(double* matrix, int n);
+std::vector<double> qr_pseudoinverse(double* matrix, int n, double cond_cutoff);

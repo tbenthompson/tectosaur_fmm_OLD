@@ -107,7 +107,7 @@ def data_to_gpu(fmm_mat, input_vals):
     ]
 
     gd['uc2e_node_n_idx'] = [
-        gpu.to_gpu(fmm_mat.uc2e[level].obs_n_idx, np.int32) for level in range(n_levels)
+        gpu.to_gpu(fmm_mat.uc2e[level].src_n_idx, np.int32) for level in range(n_levels)
     ]
     gd['uc2e_node_depth'] = gpu.to_gpu(np.array([n.depth for n in fmm_mat.src_tree.nodes]), np.int32)
     gd['uc2e_ops'] = gpu.to_gpu(fmm_mat.uc2e_ops, float_type)
@@ -191,7 +191,7 @@ def gpu_m2m(fmm_mat, gd, level, uc2e_ev):
         return None
 
 def gpu_uc2e(fmm_mat, gd, level, m2m_ev):
-    uc2e = getattr(get_gpu_module(), 'uc2e_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
+    uc2e = get_gpu_module().uc2e_kernel
     n_uc2e = gd['uc2e_node_n_idx'][level].shape[0]
     n_uc2e_rows = gd['tensor_dim'] * gd['n_surf_pts']
     if n_uc2e > 0:
@@ -211,12 +211,14 @@ def gpu_uc2e(fmm_mat, gd, level, m2m_ev):
 
 def print_timing(p2p_ev, m2m_evs, uc2e_evs, m2p_ev):
     def get_time(ev):
-        return (ev.profile.end - ev.profile.start) * 1e-9
+        if ev is not None:
+            return (ev[0].profile.end - ev[0].profile.start) * 1e-9
+        return 0
 
-    p2p_t = get_time(p2p_ev[0])
-    m2p_t = get_time(m2p_ev[0])
-    m2m_t = sum([get_time(level[0]) for level in m2m_evs])
-    uc2e_t = sum([get_time(level[0]) for level in m2m_evs])
+    p2p_t = get_time(p2p_ev)
+    m2p_t = get_time(m2p_ev)
+    m2m_t = sum([get_time(level) for level in m2m_evs])
+    uc2e_t = sum([get_time(level) for level in m2m_evs])
     print('p2p took ' + str(p2p_t))
     print('m2p took ' + str(m2p_t))
     print('m2m took ' + str(m2m_t))

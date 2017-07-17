@@ -215,7 +215,7 @@ extern "C" void dgelsy_(int* M, int* N, int* NRHS, double* A, int* LDA,
                         double* B, int* LDB, int* JPVT, double* RCOND,
                         int* RANK, double* WORK, int* LWORK, int* INFO);
 
-std::vector<double> qr_pseudoinverse(double* matrix, int n) {
+std::vector<double> qr_pseudoinverse(double* matrix, int n, double cond_cutoff) {
     std::vector<double> rhs(n * n, 0.0);
     for (int i = 0; i < n; i++) {
         rhs[i * n + i] = 1.0;
@@ -226,8 +226,7 @@ std::vector<double> qr_pseudoinverse(double* matrix, int n) {
     std::vector<double> work(lwork);
     int rank;
     int info;
-    double rcond = 1e-15;
-    dgelsy_(&n, &n, &n, matrix, &n, rhs.data(), &n, jpvt.data(), &rcond, &rank,
+    dgelsy_(&n, &n, &n, matrix, &n, rhs.data(), &n, jpvt.data(), &cond_cutoff, &rank,
             work.data(), &lwork, &info);
     return rhs;
 }

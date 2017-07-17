@@ -20,5 +20,4 @@ def test_c2e_solve_relations():
     scale = 2.0
     b2 = fmm.two.Cube([0,0], scale)
     op2 = np.array(fmm.two.c2e_solve(s, b2, 3.0, 1.1, cfg)) / scale
-    print(scale, op2 / op)
     np.testing.assert_almost_equal(op2, op)

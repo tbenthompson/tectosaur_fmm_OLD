@@ -2,7 +2,7 @@ import numpy as np
 from tectosaur.util.test_decorators import slow, kernel
 
 import tectosaur_fmm.fmm_wrapper as fmm
-from tectosaur.ops.sparse_integral_op import farfield_pts_wrapper
+from tectosaur.farfield import farfield_pts_direct
 from test_fmm import run_full, rand_pts, check
 
 # test fmm with elastic kernels more, this is confusing...
@@ -48,12 +48,12 @@ def test_self_fmm():
 
     # orig_idxs = np.array(kd.orig_idxs)
     # input_kd = input.reshape((-1,3))[orig_idxs,:].reshape(-1)
-    # correct_kd = farfield_pts_wrapper(kernel, np.array(kd.pts), np.array(kd.normals), np.array(kd.pts), np.array(kd.normals), input_kd, params).reshape((-1,3))
+    # correct_kd = farfield_pts_direct(kernel, np.array(kd.pts), np.array(kd.normals), np.array(kd.pts), np.array(kd.normals), input_kd, params).reshape((-1,3))
     # correct2 = np.empty_like(correct_kd)
     # correct2[orig_idxs,:] = correct_kd
     # # check(results[-1,:], correct2, 2)
     # correct2 = correct2.reshape(correct2.size)
-    # correct = farfield_pts_wrapper(kernel, pts, ns, pts, ns, input, params)
+    # correct = farfield_pts_direct(kernel, pts, ns, pts, ns, input, params)
     # check(results[-1,:].flatten(), correct, 2)
 
 @slow

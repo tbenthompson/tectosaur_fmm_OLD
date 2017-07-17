@@ -35,7 +35,7 @@ float atomic_fadd(volatile __global float *addr, float val)
 
 <%def name="load_bounds(K, node_name, type, R)">
     Real ${node_name}_surf_radius = ${type}_n_width[${node_name}_idx] * ${R} * 
-        sqrt((double)${K.spatial_dim});
+        sqrt((Real)${K.spatial_dim});
     % for d in range(K.spatial_dim):
     Real ${node_name}_center${dn(d)} = ${type}_n_center[${node_name}_idx * ${K.spatial_dim} + ${d}];
     % endfor
@@ -80,7 +80,16 @@ float atomic_fadd(volatile __global float *addr, float val)
     }
     % endif
 
-    ${K.vector_code}
+    % if K.vector_code is None:
+        ${K.tensor_code}
+        % for d1 in range(K.tensor_dim):
+            % for d2 in range(K.tensor_dim):
+                sum${dn(d1)} += K${d1}${d2} * in${dn(d2)};
+            % endfor
+        % endfor
+    % else:
+        ${K.vector_code}
+    % endif
 </%def>
 
 <%def name="output_sum(K, out_idx)">
@@ -310,9 +319,9 @@ void m2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
 }
 </%def>
 
-<%def name="uc2e_kernel(K)">
+<%def name="uc2e_kernel()">
 __kernel
-void uc2e_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
+void uc2e_kernel(__global Real* out, __global Real* in,
         int n_blocks, int n_rows, __global int* node_idx, __global int* node_depth,
         __global Real* ops)
 {
@@ -336,5 +345,5 @@ void uc2e_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in
     ${m2p_kernel(K)}
     ${p2m_kernel(K)}
     ${m2m_kernel(K)}
-    ${uc2e_kernel(K)}
 % endfor
+${uc2e_kernel()}

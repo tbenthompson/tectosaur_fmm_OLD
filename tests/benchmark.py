@@ -3,45 +3,45 @@ import tectosaur_fmm.fmm_wrapper as fmm
 from tectosaur.util.timer import Timer
 from tectosaur.util.test_decorators import golden_master
 
-from tectosaur.ops.sparse_integral_op import farfield_pts_wrapper
+from tectosaur.farfield import farfield_pts_direct
 
 
 K = 'elasticH'
 tensor_dim = 3
-n = 1000000
 params = [1.0, 0.25]
 
 fmm.get_gpu_module()
 
-def direct_runner():
-    t = Timer()
-    np.random.seed(10)
-
-    pts = np.random.rand(n, 3)
-    ns = np.random.rand(n, 3)
+def random_data(N):
+    pts = np.random.rand(N, 3)
+    ns = np.random.rand(N, 3)
     ns /= np.linalg.norm(ns, axis = 1)[:,np.newaxis]
-    input = np.random.rand(n * tensor_dim)
-    t.report('setup problem')
+    input = np.random.rand(N * tensor_dim)
+    return pts, ns, input
 
-    out_direct = farfield_pts_wrapper(K, pts, ns, pts, ns, input, params)
+def grid_data(N):
+    xs = np.linspace(-1.0, 1.0, N)
+    X,Y,Z = np.meshgrid(xs,xs,xs)
+    pts = np.array([X.flatten(), Y.flatten(), Z.flatten()]).T
+    ns = np.random.rand(N * N * N, 3)
+    ns /= np.linalg.norm(ns, axis = 1)[:,np.newaxis]
+    input = np.random.rand(N * N * N, tensor_dim)
+    np.set_printoptions(precision=18)
+    return pts.copy(), ns.copy(), input.copy()
+
+def direct_runner(pts, ns, input):
+    t = Timer()
+    # out_direct = farfield_pts_direct(K, pts, ns, pts, ns, input, params)
+    return fmm.three.mf_direct_eval(K, pts, ns, pts, ns, params, input)
     t.report('eval direct')
-
     return out_direct
 
-def fmm_runner():
+def fmm_runner(pts, ns, input):
     t = Timer()
-    np.random.seed(10)
 
-    mac = 3.0
-    order = 150
-    pts_per_cell = order * 2
-    # pts_per_cell = n + 1
-
-    pts = np.random.rand(n, 3)
-    ns = np.random.rand(n, 3)
-    ns /= np.linalg.norm(ns, axis = 1)[:,np.newaxis]
-    input = np.random.rand(n * tensor_dim)
-    t.report('setup problem')
+    mac = 30.0
+    order = 200
+    pts_per_cell = order
 
     tree = fmm.three.Octree(pts, ns, pts_per_cell)
     t.report('build tree')
@@ -60,6 +60,7 @@ def fmm_runner():
     t.report('data to gpu')
 
     output = fmm.eval_ocl(fmm_mat, input_tree, gpu_data)
+    output = fmm.eval_cpu(fmm_mat, input_tree)
     t.report('eval fmm')
 
     output = output.reshape((-1, tensor_dim))
@@ -70,19 +71,25 @@ def fmm_runner():
 
 @golden_master(6)
 def test_benchmark(request):
-    global n
-    n = 100000
-    out = fmm_runner()
+    global N
+    N = 100000
+    data = random_data(N)
+    out = fmm_runner(*data)
     print(out / np.max(np.abs(out)))
     return out / np.max(np.abs(out))
 
-def compare_to_direct(A):
-    B = direct_runner()
+def check(A, B):
     L2B = np.sqrt(np.sum(B ** 2))
     L2Diff = np.sqrt(np.sum((A - B) ** 2))
     relL2 = L2Diff / L2B
     print(L2B, L2Diff, relL2)
 
 if __name__ == '__main__':
-    A = fmm_runner().flatten()
-    # compare_to_direct(A)
+    # N = 100000
+    # data = random_data(N)
+    N = 25
+    np.random.seed(10)
+    data = grid_data(N)
+    A = fmm_runner(*data).flatten()
+    B = direct_runner(*data)
+    check(A, B)

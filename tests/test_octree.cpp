@@ -48,7 +48,8 @@ TEST_CASE("bounding box contains its pts")
 {
     for (size_t i = 0; i < 10; i++) {
         auto pts = random_pts<2>(10, -1, 1); 
-        auto b = bounding_box(pts.data(), pts.size());
+        auto pts_normals = combine_pts_normals(pts.data(), pts.data(), pts.size());
+        auto b = bounding_box(pts_normals.data(), pts.size());
         auto b_shrunk = b;
         b_shrunk.width /= 1 + 1e-10;
         bool all_pts_in_shrunk = true;
@@ -64,8 +65,8 @@ TEST_CASE("octree partition") {
     size_t n_pts = 100;
     auto pts = random_pts<3>(n_pts, -1, 1);    
     auto ns = random_pts<3>(n_pts, -1, 1);    
-    auto bounds = bounding_box(pts.data(), pts.size());
     auto pts_normals = combine_pts_normals(pts.data(), ns.data(), n_pts);
+    auto bounds = bounding_box(pts_normals.data(), pts.size());
     auto splits = octree_partition(bounds, pts_normals.data(), pts_normals.data() + n_pts);
     for (int i = 0; i < 8; i++) {
         for (int j = splits[i]; j < splits[i + 1]; j++) {

@@ -44,7 +44,7 @@ std::vector<double> c2e_solve(std::vector<std::array<double,dim>> surf,
         },
         equiv_to_check.data());
 
-    auto pinv = qr_pseudoinverse(equiv_to_check.data(), n_rows);
+    auto pinv = qr_pseudoinverse(equiv_to_check.data(), n_rows, 1e-15);
 
     return pinv;
 }
