@@ -53,14 +53,15 @@ struct FMMMat {
     Octree<dim> src_tree;
     FMMConfig<dim> cfg;
     std::vector<std::array<double,dim>> surf;
-    int translation_surface_order;
 
-    MatrixFreeOp p2p;
     MatrixFreeOp p2m;
+    std::vector<MatrixFreeOp> m2m;
+    MatrixFreeOp p2l;
+    MatrixFreeOp m2l;
+    std::vector<MatrixFreeOp> l2l;
+    MatrixFreeOp p2p;
     MatrixFreeOp m2p;
     MatrixFreeOp l2p;
-    std::vector<MatrixFreeOp> m2m;
-    std::vector<MatrixFreeOp> l2l;
 
     std::vector<double> uc2e_ops;
     std::vector<MatrixFreeOp> uc2e;
@@ -74,11 +75,13 @@ struct FMMMat {
     int tensor_dim() const { return cfg.tensor_dim(); }
 
     void p2m_matvec(double* out, double* in);
+    void m2m_matvec(double* out, double* in, int level);
+    void p2l_matvec(double* out, double* in);
+    void m2l_matvec(double* out, double* in);
+    void l2l_matvec(double* out, double* in, int level);
     void p2p_matvec(double* out, double* in);
     void m2p_matvec(double* out, double* in);
     void l2p_matvec(double* out, double* in);
-    void m2m_matvec(double* out, double* in, int level);
-    void l2l_matvec(double* out, double* in, int level);
     void dc2e_matvec(double* out, double* in, int level);
     void uc2e_matvec(double* out, double* in, int level);
 

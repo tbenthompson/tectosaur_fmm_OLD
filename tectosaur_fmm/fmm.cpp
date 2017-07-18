@@ -88,33 +88,26 @@ void wrap_dim(py::module& m) {
         .def_property_readonly("kernel_name", &FMMConfig<dim>::kernel_name)
         .def_property_readonly("tensor_dim", &FMMConfig<dim>::tensor_dim);
 
-#define EVALFNC(FNCNAME, OUTNAME, INNAME)\
-        def(#FNCNAME"_eval", [] (FMMMat<dim>& m, NPArrayD OUTNAME, NPArrayD INNAME) {\
-            auto* OUTNAME_ptr = reinterpret_cast<double*>(OUTNAME.request().ptr);\
-            auto* INNAME_ptr = reinterpret_cast<double*>(INNAME.request().ptr);\
-            m.FNCNAME##_matvec(OUTNAME_ptr, INNAME_ptr);\
+#define EVALFNC(FNCNAME)\
+        def(#FNCNAME"_eval", [] (FMMMat<dim>& m, NPArrayD out, NPArrayD in) {\
+            auto* out_ptr = reinterpret_cast<double*>(out.request().ptr);\
+            auto* in_ptr = reinterpret_cast<double*>(in.request().ptr);\
+            m.FNCNAME##_matvec(out_ptr, in_ptr);\
         })
-#define EVALFNCLEVEL(FNCNAME, OUTNAME, INNAME)\
-        def(#FNCNAME"_eval", [] (FMMMat<dim>& m, NPArrayD OUTNAME, NPArrayD INNAME, int level) {\
-            auto* OUTNAME_ptr = reinterpret_cast<double*>(OUTNAME.request().ptr);\
-            auto* INNAME_ptr = reinterpret_cast<double*>(INNAME.request().ptr);\
-            m.FNCNAME##_matvec(OUTNAME_ptr, INNAME_ptr, level);\
+#define EVALFNCLEVEL(FNCNAME)\
+        def(#FNCNAME"_eval", [] (FMMMat<dim>& m, NPArrayD out, NPArrayD in, int level) {\
+            auto* out_ptr = reinterpret_cast<double*>(out.request().ptr);\
+            auto* in_ptr = reinterpret_cast<double*>(in.request().ptr);\
+            m.FNCNAME##_matvec(out_ptr, in_ptr, level);\
         })
+#define OP(NAME)\
+        def_readonly(#NAME, &FMMMat<dim>::NAME)
 
     py::class_<FMMMat<dim>>(m, "FMMMat")
         .def_readonly("obs_tree", &FMMMat<dim>::obs_tree)
         .def_readonly("src_tree", &FMMMat<dim>::src_tree)
         .def_readonly("surf", &FMMMat<dim>::surf)
-        .def_readonly("p2p", &FMMMat<dim>::p2p)
-        .def_readonly("p2m", &FMMMat<dim>::p2m)
-        .def_readonly("m2p", &FMMMat<dim>::m2p)
-        .def_readonly("m2m", &FMMMat<dim>::m2m)
-        .def_readonly("l2l", &FMMMat<dim>::m2m)
-        .def_readonly("l2p", &FMMMat<dim>::m2m)
         .def_readonly("cfg", &FMMMat<dim>::cfg)
-        .def_readonly("translation_surface_order", &FMMMat<dim>::translation_surface_order)
-        .def_readonly("uc2e", &FMMMat<dim>::uc2e)
-        .def_readonly("dc2e", &FMMMat<dim>::uc2e)
         .def_property_readonly("uc2e_ops", [] (FMMMat<dim>& fmm) {
             return make_array<double>(
                 {fmm.uc2e_ops.size()}, reinterpret_cast<double*>(fmm.uc2e_ops.data())
@@ -126,15 +119,11 @@ void wrap_dim(py::module& m) {
             );
         })
         .def_property_readonly("tensor_dim", &FMMMat<dim>::tensor_dim)
-        .EVALFNC(p2p, out, in)
-        .EVALFNC(p2m, m_check, in)
-        .EVALFNC(m2p, out, multipoles)
-        .EVALFNC(l2p, out, locals)
-        .EVALFNCLEVEL(m2m, m_check, multipoles)
-        .EVALFNCLEVEL(uc2e, multipoles, m_check)
-        .EVALFNCLEVEL(l2l, l_check, locals)
-        .EVALFNCLEVEL(dc2e, locals, l_check);
+        .OP(p2m).OP(m2m).OP(p2l).OP(m2l).OP(l2l).OP(p2p).OP(m2p).OP(l2p).OP(uc2e).OP(dc2e)
+        .EVALFNC(p2p).EVALFNC(p2m).EVALFNC(p2l).EVALFNC(m2l).EVALFNC(m2p).EVALFNC(l2p)
+        .EVALFNCLEVEL(m2m).EVALFNCLEVEL(uc2e).EVALFNCLEVEL(l2l).EVALFNCLEVEL(dc2e);
 
+#undef EXPOSEOP
 #undef EVALFNC
 #undef EVALFNCLEVEL
 
@@ -190,12 +179,8 @@ PYBIND11_PLUGIN(fmm) {
     })
 
     py::class_<MatrixFreeOp>(m, "MatrixFreeOp")
-        .NPARRAYPROP(obs_n_start)
-        .NPARRAYPROP(obs_n_end)
-        .NPARRAYPROP(obs_n_idx)
-        .NPARRAYPROP(src_n_start)
-        .NPARRAYPROP(src_n_end)
-        .NPARRAYPROP(src_n_idx);
+        .NPARRAYPROP(obs_n_start).NPARRAYPROP(obs_n_end).NPARRAYPROP(obs_n_idx)
+        .NPARRAYPROP(src_n_start).NPARRAYPROP(src_n_end).NPARRAYPROP(src_n_idx);
 #undef NPARRAYPROP
 
     return m.ptr();

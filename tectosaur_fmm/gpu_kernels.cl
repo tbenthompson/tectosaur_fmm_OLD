@@ -1,5 +1,4 @@
 <%!
-#TODO: IS THERE A WAY TO SHARE THINGS BETWEEN OCL SCRIPTS?
 def dn(dim):
     return ['x', 'y', 'z'][dim]
 

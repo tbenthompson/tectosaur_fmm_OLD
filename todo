@@ -1,3 +1,5 @@
+redo the analysis of best worker group size, best approx order, best mac with FMM instead of treecode
+
 move fmm_integral_op into this package
 use FMM for okada -- just try it out first, make sure its accurate.
 read about the implementation of the high-performance volumetric integration tools.
@@ -8,7 +10,7 @@ get rid of the error about Wstrict-prototypes: https://stackoverflow.com/questio
 
 use homogeneity in the p2m, so that cells can be any size and I could go back to using a kdtree or other data structure, so long as all cells have spherical bounds.  since i'm not using the relative positions of cells, i could use shrinked octree node bounds.
 
-m2l, l2l, l2p
+use symmetry in the appropriate kernels
 
 
 

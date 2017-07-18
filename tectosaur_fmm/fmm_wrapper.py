@@ -13,8 +13,6 @@ fmm = cppimport.imp("tectosaur_fmm.fmm").fmm
 for k in dir(fmm):
     locals()[k] = getattr(fmm, k)
 
-gpu_module = None
-
 if 'profile' not in __builtins__:
     def profile(f):
         return f
@@ -37,8 +35,8 @@ def get_gpu_module(surf, K):
 def report_p2p_vs_m2p(fmm_mat):
     surf_n = len(fmm_mat.surf)
 
-    starts = fmm_mat.p2m.obs_n_start
-    ends = fmm_mat.p2m.obs_n_end
+    starts = fmm_mat.p2m.src_n_start
+    ends = fmm_mat.p2m.src_n_end
     p2m_i = np.sum((ends - starts) * surf_n)
 
     m2m_i = (
@@ -46,23 +44,44 @@ def report_p2p_vs_m2p(fmm_mat):
         * surf_n * surf_n
     )
 
-    ends = np.array(fmm_mat.m2p.obs_n_end)
+    starts = fmm_mat.p2l.src_n_start
+    ends = fmm_mat.p2l.src_n_end
+    p2l_i = np.sum((ends - starts) * surf_n)
+
+    m2l_i = len(fmm_mat.m2l.obs_n_idx) * surf_n * surf_n
+
+    l2l_i = (
+        sum([len(fmm_mat.l2l[level].obs_n_idx) for level in range(len(fmm_mat.l2l))])
+        * surf_n * surf_n
+    )
+
     starts = np.array(fmm_mat.m2p.obs_n_start)
+    ends = np.array(fmm_mat.m2p.obs_n_end)
     m2p_i = np.sum((ends - starts) * surf_n)
+
+    starts = fmm_mat.l2p.obs_n_start
+    ends = fmm_mat.l2p.obs_n_end
+    l2p_i = np.sum((ends - starts) * surf_n)
+
     obs_ends = np.array(fmm_mat.p2p.obs_n_end)
     obs_starts = np.array(fmm_mat.p2p.obs_n_start)
     src_ends = np.array(fmm_mat.p2p.src_n_end)
     src_starts = np.array(fmm_mat.p2p.src_n_start)
     p2p_i = np.sum((obs_ends - obs_starts) * (src_ends - src_starts))
-    tree_i = p2p_i + m2p_i + p2m_i + m2m_i
+
+    tree_i = p2p_i + m2p_i + p2m_i + m2m_i + m2l_i + l2l_i + l2p_i + p2l_i
     direct_i = len(fmm_mat.obs_tree.pts) * len(fmm_mat.src_tree.pts)
 
     print('compression factor: ' + str(tree_i / direct_i))
     print('total tree interactions: %e' % tree_i)
-    print('total p2p interactions: %e' % p2p_i)
     print('total p2m interactions: %e' % p2m_i)
     print('total m2m interactions: %e' % m2m_i)
+    print('total p2l interactions: %e' % p2l_i)
+    print('total m2l interactions: %e' % m2l_i)
+    print('total l2l interactions: %e' % l2l_i)
+    print('total p2p interactions: %e' % p2p_i)
     print('total m2p interactions: %e' % m2p_i)
+    print('total l2p interactions: %e' % l2p_i)
 
 def data_to_gpu(fmm_mat, input_vals):
     src_tree_nodes = fmm_mat.src_tree.nodes
@@ -263,29 +282,29 @@ def eval_cpu(fmm_mat, input_vals):
     n_locals = fmm_mat.obs_tree.n_nodes * len(fmm_mat.surf) * tensor_dim
 
     out = np.zeros(n_out)
-    fmm_mat.p2p_eval(out, input_vals)
-
     m_check = np.zeros(n_multipoles)
     multipoles = np.zeros(n_multipoles)
+    l_check = np.zeros(n_locals)
+    locals = np.zeros(n_locals)
 
     fmm_mat.p2m_eval(m_check, input_vals)
     fmm_mat.uc2e_eval(multipoles, m_check, 0)
 
     for i in range(1, len(fmm_mat.m2m)):
-        m_check[:] = 0 #TODO: Is this necessary?
         fmm_mat.m2m_eval(m_check, multipoles, i)
         fmm_mat.uc2e_eval(multipoles, m_check, i)
 
-    l_check = np.zeros(n_locals)
-    locals = np.zeros(n_locals)
-    for i in range(0, len(fmm_mat.l2l)):
-        print("hi " + str(i))
+    fmm_mat.p2l_eval(l_check, input_vals)
+    fmm_mat.m2l_eval(l_check, multipoles)
+    fmm_mat.dc2e_eval(locals, l_check, 0)
+
+    for i in range(1, len(fmm_mat.l2l)):
         fmm_mat.l2l_eval(l_check, locals, i)
-        print("hi2 " + str(i))
         fmm_mat.dc2e_eval(locals, l_check, i)
 
-    print("hi3")
     fmm_mat.l2p_eval(out, locals)
 
+    fmm_mat.p2p_eval(out, input_vals)
     fmm_mat.m2p_eval(out, multipoles)
+
     return out

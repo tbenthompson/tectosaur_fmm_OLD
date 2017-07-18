@@ -22,8 +22,23 @@ def random_data(N):
     pts = np.random.rand(N, 3)
     ns = np.random.rand(N, 3)
     ns /= np.linalg.norm(ns, axis = 1)[:,np.newaxis]
-    input = np.random.rand(N * tensor_dim)
+    input = np.random.rand(N, tensor_dim)
     return pts, ns, input
+
+def ellipsoid_pts(N):
+    a = 4.0
+    b = 1.0
+    c = 1.0
+    uv = np.random.rand(N, 2)
+    uv[:, 0] = (uv[:, 0] * np.pi) - np.pi / 2
+    uv[:, 1] = (uv[:, 1] * 2 * np.pi) - np.pi
+    x = a * np.cos(uv[:, 0]) * np.cos(uv[:, 1])
+    y = b * np.cos(uv[:, 0]) * np.sin(uv[:, 1])
+    z = c * np.sin(uv[:, 0])
+    ns = np.random.rand(N, 3)
+    ns /= np.linalg.norm(ns, axis = 1)[:,np.newaxis]
+    input = np.random.rand(N, tensor_dim)
+    return np.array([x, y, z]).T.copy(), ns.copy(), input
 
 def grid_data(N):
     xs = np.linspace(-1.0, 1.0, N)
@@ -58,11 +73,13 @@ def fmm_runner(pts, ns, input):
     t.report('setup fmm')
     fmm.report_p2p_vs_m2p(fmm_mat)
     t.report('report')
+    import sys;sys.exit()
 
     gpu_data = fmm.data_to_gpu(fmm_mat, input_tree)
     t.report('data to gpu')
 
-    output = fmm.eval_ocl(fmm_mat, input_tree, gpu_data)
+    # output = fmm.eval_ocl(fmm_mat, input_tree, gpu_data)
+    output = fmm.eval_cpu(fmm_mat, input_tree)
     t.report('eval fmm')
 
     output = output.reshape((-1, tensor_dim))
@@ -90,8 +107,10 @@ if __name__ == '__main__':
     np.random.seed(10)
     # N = 1000000
     # data = random_data(N)
-    N = 30
-    data = grid_data(N)
+    N = 1000000
+    data = ellipsoid_pts(N)
+    # N = int(1e7 ** (1.0 / 3.0))
+    # data = grid_data(N)
     A = fmm_runner(*data).flatten()
     B = direct_runner(*data)
     check(A, B)

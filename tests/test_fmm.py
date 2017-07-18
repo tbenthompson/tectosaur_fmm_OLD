@@ -31,7 +31,7 @@ def ellipsoid_pts(n, source):
     z = c * np.sin(uv[:, 0])
     return np.array([x, y, z]).T
 
-def m2p_test_pts(dim):
+def m2l_test_pts(dim):
     def f(n, is_source):
         out = np.random.rand(n, dim)
         if is_source:
@@ -132,11 +132,11 @@ def test_elastic():
         4000, rand_pts(dim), 2.6, order, K, [1.0, 0.25], ocl = False
     ), accuracy = 1)
 
-def test_m2p(laplace_kernel, dim):
+def test_m2l(laplace_kernel, dim):
     K = laplace_kernel + str(dim)
     order = 15 if dim == 2 else 100
     check_kernel(K, *run_full(
-        10000, m2p_test_pts(dim), 2.6, order, K, [], max_pts_per_cell = 100000
+        10000, m2l_test_pts(dim), 2.6, order, K, [], max_pts_per_cell = 100000
     ), accuracy = 3)
 
 def test_irregular():
@@ -144,4 +144,4 @@ def test_irregular():
     check_kernel(K, *run_full(10000, ellipsoid_pts, 2.6, 35, K, []))
 
 if __name__ == '__main__':
-    test_elastic()
+    test_ones(2)
