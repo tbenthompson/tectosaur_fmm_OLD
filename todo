@@ -14,6 +14,7 @@ get rid of the error about Wstrict-prototypes: https://stackoverflow.com/questio
 
 NOT NOW:
 write a script to gather performance counters for opencl
+http://docs.nvidia.com/cuda/profiler-users-guide/#command-line-profiler-options
 
 allow configuration of qr pseudoinverse epsilon, do gpu qr inverse.
 

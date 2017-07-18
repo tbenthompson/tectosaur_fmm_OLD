@@ -67,15 +67,15 @@ def data_to_gpu(fmm_mat, input_vals):
 
     gd = dict()
 
-    gd['module'] = get_gpu_module(np.array(fmm_mat.surf))
+    surf = np.array(fmm_mat.surf)
+    gd['module'] = get_gpu_module(surf)
     gd['obs_pts'] = gpu.to_gpu(fmm_mat.obs_tree.pts, float_type)
     gd['obs_normals'] = gpu.to_gpu(fmm_mat.obs_tree.normals, float_type)
     gd['src_pts'] = gpu.to_gpu(fmm_mat.src_tree.pts, float_type)
     gd['src_normals'] = gpu.to_gpu(fmm_mat.src_tree.normals, float_type)
     gd['dim'] = gd['obs_pts'].shape[1]
     gd['tensor_dim'] = fmm_mat.cfg.tensor_dim
-    gd['surf'] = gpu.to_gpu(np.array(fmm_mat.surf), float_type)
-    gd['n_surf_pts'] = np.int32(gd['surf'].shape[0])
+    gd['n_surf_pts'] = np.int32(surf.shape[0])
     gd['n_surf_dofs'] = gd['n_surf_pts'] * gd['tensor_dim']
     gd['params'] = gpu.to_gpu(np.array(fmm_mat.cfg.params), float_type)
     gd['out'] = gpu.zeros_gpu(gd['tensor_dim'] * gd['obs_pts'].shape[0], float_type)
@@ -166,7 +166,7 @@ def gpu_p2m(fmm_mat, gd):
             (n_workers_per_block,),
             gd['m_check'].data, gd['in'].data,
             np.int32(n_p2m), gd['p2m_parent_n_start'].data, gd['p2m_parent_n_end'].data,
-            gd['p2m_parent_n_idx'].data, np.int32(gd['n_surf_pts']), gd['surf'].data,
+            gd['p2m_parent_n_idx'].data,
             gd['src_n_center'].data, gd['src_n_width'].data, float_type(fmm_mat.cfg.outer_r),
             gd['src_pts'].data, gd['src_normals'].data,
             gd['params'].data
@@ -184,7 +184,6 @@ def gpu_m2m(fmm_mat, gd, level, uc2e_ev):
             (n_workers_per_block,),
             gd['m_check'].data, gd['multipoles'].data,
             np.int32(n_m2m), gd['m2m_parent_n_idx'][level].data, gd['m2m_child_n_idx'][level].data,
-            np.int32(gd['n_surf_pts']), gd['surf'].data,
             gd['src_n_center'].data, gd['src_n_width'].data,
             float_type(fmm_mat.cfg.inner_r), float_type(fmm_mat.cfg.outer_r),
             gd['params'].data,

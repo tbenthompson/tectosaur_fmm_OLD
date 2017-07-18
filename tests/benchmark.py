@@ -90,8 +90,8 @@ if __name__ == '__main__':
     np.random.seed(10)
     # N = 1000000
     # data = random_data(N)
-    N = 100
+    N = 30
     data = grid_data(N)
     A = fmm_runner(*data).flatten()
-    # B = direct_runner(*data)
-    # check(A, B)
+    B = direct_runner(*data)
+    check(A, B)

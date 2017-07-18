@@ -10,6 +10,8 @@ from tectosaur.kernels import fmm_kernels
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 #define Real ${gpu_float_type}
 
+__constant Real surf[${surf.size}] = {${str(surf.flatten().tolist())[1:-1]}};
+
 // Atomic floating point addition for opencl
 // from: https://streamcomputing.eu/blog/2016-02-09/atomic-operations-for-floats-in-opencl-improved/
 // I was worried this would cause a significant decrease in performance, but
@@ -188,8 +190,6 @@ void p2p_kernel_${K.name}${K.spatial_dim}(
 }
 </%def>
 
-__constant Real surf_n[${surf.size}] = {${str(surf.flatten().tolist())[1:-1]}};
-
 <%def name="m2p_kernel(K)">
 __kernel
 void m2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
@@ -231,7 +231,7 @@ void m2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
             for (int chunk_j = 0; chunk_j < chunk_j_max; chunk_j++) {
                 % for d in range(K.spatial_dim):
                     Real nsrc${dn(d)} = 
-                        surf_n[(chunk_start + chunk_j) * ${K.spatial_dim} + ${d}];
+                        surf[(chunk_start + chunk_j) * ${K.spatial_dim} + ${d}];
                     Real src${dn(d)} = src_surf_radius * nsrc${dn(d)} + src_center${dn(d)};
                 % endfor
                 % for d in range(K.tensor_dim):
@@ -251,7 +251,7 @@ void m2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
 __kernel
 void p2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
         int n_blocks, __global int* parent_n_start, __global int* parent_n_end,
-        __global int* parent_n_idx, int n_surf, __global Real* surf,
+        __global int* parent_n_idx, 
         __global Real* src_n_center, __global Real* src_n_width, Real outer_r,
         __global Real* src_pts, __global Real* src_ns, __global Real* params)
 {
@@ -265,7 +265,7 @@ void p2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
 
     ${K.constants_code}
 
-    for (int i = worker_idx; i < n_surf; i += ${n_workers_per_block}) {
+    for (int i = worker_idx; i < ${surf.shape[0]}; i += ${n_workers_per_block}) {
         ${load_surf_pts(K, "obs", "parent", "i")}
         ${init_sum(K)}
 
@@ -275,7 +275,7 @@ void p2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
             ${call_kernel(K, False)}
         }
 
-        ${output_sum(K, "parent_idx * n_surf + i")}
+        ${output_sum(K, "parent_idx * " + str(surf.shape[0]) + " + i")}
     }
 }
 </%def>
@@ -284,7 +284,6 @@ void p2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
 __kernel
 void m2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
         int n_blocks, __global int* parent_n_idx, __global int* child_n_idx,
-        int n_surf, __global Real* surf,
         __global Real* src_n_center, __global Real* src_n_width,
         Real inner_r, Real outer_r, __global Real* params)
 {
@@ -298,17 +297,17 @@ void m2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
 
     ${K.constants_code}
 
-    for (int i = worker_idx; i < n_surf; i += ${n_workers_per_block}) {
+    for (int i = worker_idx; i < ${surf.shape[0]}; i += ${n_workers_per_block}) {
         ${load_surf_pts(K, "obs", "parent", "i")}
         ${init_sum(K)}
 
-        for (int j = 0; j < n_surf; j++) {
+        for (int j = 0; j < ${surf.shape[0]}; j++) {
             ${load_surf_pts(K, "src", "child", "j")}
-            ${load_input(K, "child_idx * n_surf + j")}
+            ${load_input(K, "child_idx * " + str(surf.shape[0]) + " + j")}
             ${call_kernel(K, False)}
         }
 
-        ${output_sum(K, "parent_idx * n_surf + i")}
+        ${output_sum(K, "parent_idx * " + str(surf.shape[0]) + " + i")}
     }
 }
 </%def>
