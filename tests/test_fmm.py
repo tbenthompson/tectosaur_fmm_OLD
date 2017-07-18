@@ -110,7 +110,7 @@ def laplace_kernel(request):
 
 def test_p2p(laplace_kernel, dim):
     check_kernel(laplace_kernel, *run_full(
-        1000, rand_pts(dim), 2.6, 1, laplace_kernel, [], max_pts_per_cell = 100000
+        1000, rand_pts(dim), 2.6, 1, laplace_kernel, [], max_pts_per_cell = 100000,
     ), accuracy = 10)
 
 def test_laplace_all(laplace_kernel, dim):

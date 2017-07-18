@@ -188,11 +188,13 @@ void p2p_kernel_${K.name}${K.spatial_dim}(
 }
 </%def>
 
+__constant Real surf_n[${surf.size}] = {${str(surf.flatten().tolist())[1:-1]}};
+
 <%def name="m2p_kernel(K)">
 __kernel
 void m2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
         int n_blocks, __global int* obs_n_start, __global int* obs_n_end,
-        __global int* src_n_idx, int n_surf, __global Real* surf,
+        __global int* src_n_idx, 
         __global Real* src_n_center, __global Real* src_n_width, Real inner_r,
         __global Real* obs_pts, __global Real* obs_ns, __global Real* params)
 {
@@ -209,21 +211,15 @@ void m2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
     __local Real sh_src_ns[${K.spatial_dim} * ${n_workers_per_block}];
     __local Real sh_input[${K.tensor_dim} * ${n_workers_per_block}];
 
-
     for (int chunk_start = 0;
-            chunk_start < n_surf;
+            chunk_start < ${surf.shape[0]};
             chunk_start += ${n_workers_per_block}) 
     {
-
         barrier(CLK_LOCAL_MEM_FENCE);
-        % for d in range(K.spatial_dim):
-            sh_src_ns[worker_idx * ${K.spatial_dim} + ${d}] = 
-                surf[(chunk_start + worker_idx) * ${K.spatial_dim} + ${d}];
-        % endfor
-
         % for d in range(K.tensor_dim):
-            sh_input[worker_idx * ${K.tensor_dim} + ${d}] =
-                in[(src_idx * n_surf + chunk_start + worker_idx) * ${K.tensor_dim} + ${d}];
+            sh_input[worker_idx * ${K.tensor_dim} + ${d}] = in[
+                (src_idx * ${surf.shape[0]} + chunk_start + worker_idx) * ${K.tensor_dim} + ${d}
+            ];
         % endfor
         barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -231,13 +227,11 @@ void m2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
             ${load_pts(K, "obs", "i")}
             ${init_sum(K)}
 
-            for (int chunk_j = 0;
-                    (chunk_j < ${n_workers_per_block}) && 
-                    (chunk_start + chunk_j < n_surf);
-                    chunk_j++) 
-            {
+            int chunk_j_max = min(${n_workers_per_block}, ${surf.shape[0]} - chunk_start);
+            for (int chunk_j = 0; chunk_j < chunk_j_max; chunk_j++) {
                 % for d in range(K.spatial_dim):
-                    Real nsrc${dn(d)} = sh_src_ns[chunk_j * ${K.spatial_dim} + ${d}];
+                    Real nsrc${dn(d)} = 
+                        surf_n[(chunk_start + chunk_j) * ${K.spatial_dim} + ${d}];
                     Real src${dn(d)} = src_surf_radius * nsrc${dn(d)} + src_center${dn(d)};
                 % endfor
                 % for d in range(K.tensor_dim):

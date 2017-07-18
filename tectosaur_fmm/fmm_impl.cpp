@@ -197,6 +197,33 @@ void FMMMat<dim>::uc2e_matvec(double* out, double* in, int level) {
 }
 
 template <size_t dim>
+std::vector<double> c2e_solve(std::vector<std::array<double,dim>> surf,
+    const Cube<dim>& bounds, double check_r, double equiv_r, const FMMConfig<dim>& cfg) 
+{
+    auto equiv_surf = inscribe_surf(bounds, equiv_r, surf);
+    auto check_surf = inscribe_surf(bounds, check_r, surf);
+
+    auto n_surf = surf.size();
+    auto n_rows = n_surf * cfg.tensor_dim();
+
+    std::vector<double> equiv_to_check(n_rows * n_rows);
+    cfg.kernel.f(
+        {
+            check_surf.data(), surf.data(), 
+            equiv_surf.data(), surf.data(),
+            n_surf, n_surf,
+            cfg.params.data()
+        },
+        equiv_to_check.data());
+
+    // TODO: This should be much higher (1e-14 or so) if double precision is being used
+    double eps = 1e-5; 
+    auto pinv = qr_pseudoinverse(equiv_to_check.data(), n_rows, eps);
+
+    return pinv;
+}
+
+template <size_t dim>
 void build_uc2e(FMMMat<dim>& mat) {
     int n_rows = mat.cfg.tensor_dim() * mat.surf.size();
     mat.uc2e_ops.resize((mat.src_tree.max_height + 1) * n_rows * n_rows);

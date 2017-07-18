@@ -6,11 +6,17 @@ from tectosaur.util.test_decorators import golden_master
 from tectosaur.farfield import farfield_pts_direct
 
 
-K = 'elasticH'
-tensor_dim = 3
-params = [1.0, 0.25]
+K = 'laplaceS'
+tensor_dim = 1
+mac = 2.0
+order = 100
 
-fmm.get_gpu_module()
+# K = 'elasticH'
+# tensor_dim = 3
+# mac = 3.0
+# order = 100
+
+params = [1.0, 0.25]
 
 def random_data(N):
     pts = np.random.rand(N, 3)
@@ -31,17 +37,14 @@ def grid_data(N):
 
 def direct_runner(pts, ns, input):
     t = Timer()
-    # out_direct = farfield_pts_direct(K, pts, ns, pts, ns, input, params)
-    return fmm.three.mf_direct_eval(K, pts, ns, pts, ns, params, input)
+    out_direct = farfield_pts_direct(K, pts, ns, pts, ns, input, params)
     t.report('eval direct')
     return out_direct
 
 def fmm_runner(pts, ns, input):
     t = Timer()
 
-    mac = 30.0
-    order = 200
-    pts_per_cell = order
+    pts_per_cell = 300
 
     tree = fmm.three.Octree(pts, ns, pts_per_cell)
     t.report('build tree')
@@ -60,7 +63,6 @@ def fmm_runner(pts, ns, input):
     t.report('data to gpu')
 
     output = fmm.eval_ocl(fmm_mat, input_tree, gpu_data)
-    output = fmm.eval_cpu(fmm_mat, input_tree)
     t.report('eval fmm')
 
     output = output.reshape((-1, tensor_dim))
@@ -85,11 +87,11 @@ def check(A, B):
     print(L2B, L2Diff, relL2)
 
 if __name__ == '__main__':
-    # N = 100000
-    # data = random_data(N)
-    N = 25
     np.random.seed(10)
+    # N = 1000000
+    # data = random_data(N)
+    N = 100
     data = grid_data(N)
     A = fmm_runner(*data).flatten()
-    B = direct_runner(*data)
-    check(A, B)
+    # B = direct_runner(*data)
+    # check(A, B)

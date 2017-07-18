@@ -1,7 +1,3 @@
-implement a opencl lock so that i can use doubles.
-there's something weird where error gets worse with higher orders in tests/benchmark.py not sure what's up there!
-ideas -- something with the ill conditioned C2E inversion, change rcond in the qr_pseudoinverse
-
 move fmm_integral_op into this package
 use FMM for okada -- just try it out first, make sure its accurate.
 read about the implementation of the high-performance volumetric integration tools.
@@ -17,6 +13,10 @@ get rid of the error about Wstrict-prototypes: https://stackoverflow.com/questio
 
 
 NOT NOW:
+write a script to gather performance counters for opencl
+
+allow configuration of qr pseudoinverse epsilon, do gpu qr inverse.
+
 for small problems, the main interaction traversal should mark whether a cells multipoles are ever used, then the downward pass will propagate that information allowing p2m, and m2m kernels to be pruned.
 pruning will allow fmm to be faster in all cases.
 

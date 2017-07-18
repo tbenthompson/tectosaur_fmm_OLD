@@ -26,28 +26,7 @@ struct FMMConfig {
 
 template <size_t dim>
 std::vector<double> c2e_solve(std::vector<std::array<double,dim>> surf,
-    const Cube<dim>& bounds, double check_r, double equiv_r, const FMMConfig<dim>& cfg) 
-{
-    auto equiv_surf = inscribe_surf(bounds, equiv_r, surf);
-    auto check_surf = inscribe_surf(bounds, check_r, surf);
-
-    auto n_surf = surf.size();
-    auto n_rows = n_surf * cfg.tensor_dim();
-
-    std::vector<double> equiv_to_check(n_rows * n_rows);
-    cfg.kernel.f(
-        {
-            check_surf.data(), surf.data(), 
-            equiv_surf.data(), surf.data(),
-            n_surf, n_surf,
-            cfg.params.data()
-        },
-        equiv_to_check.data());
-
-    auto pinv = qr_pseudoinverse(equiv_to_check.data(), n_rows, 1e-15);
-
-    return pinv;
-}
+    const Cube<dim>& bounds, double check_r, double equiv_r, const FMMConfig<dim>& cfg);
 
 struct MatrixFreeOp {
     std::vector<int> obs_n_start;
