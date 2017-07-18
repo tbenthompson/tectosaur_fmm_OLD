@@ -4,7 +4,7 @@ def dn(dim):
     return ['x', 'y', 'z'][dim]
 
 from tectosaur_fmm.cfg import gpu_float_type
-from tectosaur.kernels import fmm_kernels
+from tectosaur.kernels import kernels
 %>
 
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
@@ -115,9 +115,8 @@ float atomic_fadd(volatile __global float *addr, float val)
     const int block_idx = (global_idx - worker_idx) / ${n_workers_per_block};
 </%def>
 
-<%def name="p2p_kernel(K)">
 __kernel
-void p2p_kernel_${K.name}${K.spatial_dim}(
+void p2p_kernel_${K.name}(
         __global Real* out, __global Real* in, int n_blocks,
         __global int* obs_n_start, __global int* obs_n_end,
         __global int* src_n_start, __global int* src_n_end,
@@ -188,11 +187,9 @@ void p2p_kernel_${K.name}${K.spatial_dim}(
         barrier(CLK_LOCAL_MEM_FENCE);
     }
 }
-</%def>
 
-<%def name="m2p_kernel(K)">
 __kernel
-void m2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
+void m2p_kernel_${K.name}(__global Real* out, __global Real* in,
         int n_blocks, __global int* obs_n_start, __global int* obs_n_end,
         __global int* src_n_idx, 
         __global Real* src_n_center, __global Real* src_n_width, Real inner_r,
@@ -245,11 +242,9 @@ void m2p_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
         }
     }
 }
-</%def>
 
-<%def name="p2m_kernel(K)">
 __kernel
-void p2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
+void p2m_kernel_${K.name}(__global Real* out, __global Real* in,
         int n_blocks, __global int* parent_n_start, __global int* parent_n_end,
         __global int* parent_n_idx, 
         __global Real* src_n_center, __global Real* src_n_width, Real outer_r,
@@ -278,11 +273,9 @@ void p2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
         ${output_sum(K, "parent_idx * " + str(surf.shape[0]) + " + i")}
     }
 }
-</%def>
 
-<%def name="m2m_kernel(K)">
 __kernel
-void m2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
+void m2m_kernel_${K.name}(__global Real* out, __global Real* in,
         int n_blocks, __global int* parent_n_idx, __global int* child_n_idx,
         __global Real* src_n_center, __global Real* src_n_width,
         Real inner_r, Real outer_r, __global Real* params)
@@ -310,9 +303,7 @@ void m2m_kernel_${K.name}${K.spatial_dim}(__global Real* out, __global Real* in,
         ${output_sum(K, "parent_idx * " + str(surf.shape[0]) + " + i")}
     }
 }
-</%def>
 
-<%def name="uc2e_kernel()">
 __kernel
 void uc2e_kernel(__global Real* out, __global Real* in,
         int n_blocks, int n_rows, __global int* node_idx, __global int* node_depth,
@@ -331,12 +322,3 @@ void uc2e_kernel(__global Real* out, __global Real* in,
         out[n_idx * n_rows + i] += sum;
     }
 }
-</%def>
-
-% for K in fmm_kernels:
-    ${p2p_kernel(K)}
-    ${m2p_kernel(K)}
-    ${p2m_kernel(K)}
-    ${m2m_kernel(K)}
-% endfor
-${uc2e_kernel()}

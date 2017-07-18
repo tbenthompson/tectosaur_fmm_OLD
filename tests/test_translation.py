@@ -9,7 +9,7 @@ def test_inscribe():
 def test_c2e_solve_relations():
     b = fmm.two.Cube([0,0], 1.0)
     s = fmm.two.surrounding_surface(5)
-    cfg = fmm.two.FMMConfig(3.0, 1.1, 5, "laplaceD", [])
+    cfg = fmm.two.FMMConfig(3.0, 1.1, 5, "laplaceD2", [])
     op = np.array(fmm.two.c2e_solve(s, b, 3.0, 1.1, cfg))
 
     for i in range(5):

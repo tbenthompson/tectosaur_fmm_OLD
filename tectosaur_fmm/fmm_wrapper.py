@@ -5,6 +5,7 @@ from tectosaur.util.timer import Timer
 
 import tectosaur_fmm
 from tectosaur_fmm.cfg import float_type
+from tectosaur.kernels import kernels
 
 import cppimport
 fmm = cppimport.imp("tectosaur_fmm.fmm").fmm
@@ -20,10 +21,11 @@ if 'profile' not in __builtins__:
 
 n_workers_per_block = 128
 
-def get_gpu_module(surf):
+def get_gpu_module(surf, K):
     args = dict(
         n_workers_per_block = n_workers_per_block,
-        surf = surf
+        surf = surf,
+        K = K
     )
     gpu_module = gpu.load_gpu(
         'gpu_kernels.cl',
@@ -68,7 +70,8 @@ def data_to_gpu(fmm_mat, input_vals):
     gd = dict()
 
     surf = np.array(fmm_mat.surf)
-    gd['module'] = get_gpu_module(surf)
+    K = kernels[fmm_mat.cfg.kernel_name]
+    gd['module'] = get_gpu_module(surf, K)
     gd['obs_pts'] = gpu.to_gpu(fmm_mat.obs_tree.pts, float_type)
     gd['obs_normals'] = gpu.to_gpu(fmm_mat.obs_tree.normals, float_type)
     gd['src_pts'] = gpu.to_gpu(fmm_mat.src_tree.pts, float_type)
@@ -122,7 +125,7 @@ def data_to_gpu(fmm_mat, input_vals):
 
 
 def gpu_p2p(fmm_mat, gd):
-    p2p = getattr(gd['module'], 'p2p_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
+    p2p = getattr(gd['module'], 'p2p_kernel_' + fmm_mat.cfg.kernel_name)
     n_p2p = gd['p2p_obs_n_start'].shape[0]
     return [p2p(
         gpu.gpu_queue,
@@ -137,7 +140,7 @@ def gpu_p2p(fmm_mat, gd):
     )]
 
 def gpu_m2p(fmm_mat, gd, uc2e_ev):
-    m2p = getattr(gd['module'], 'm2p_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
+    m2p = getattr(gd['module'], 'm2p_kernel_' + fmm_mat.cfg.kernel_name)
     n_m2p = gd['m2p_obs_n_start'].shape[0]
     if n_m2p > 0:
         return [m2p(
@@ -157,7 +160,7 @@ def gpu_m2p(fmm_mat, gd, uc2e_ev):
 
 
 def gpu_p2m(fmm_mat, gd):
-    p2m = getattr(gd['module'], 'p2m_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
+    p2m = getattr(gd['module'], 'p2m_kernel_' + fmm_mat.cfg.kernel_name)
     n_p2m = gd['p2m_parent_n_start'].shape[0]
     if n_p2m > 0:
         return [p2m(
@@ -175,7 +178,7 @@ def gpu_p2m(fmm_mat, gd):
         return None
 
 def gpu_m2m(fmm_mat, gd, level, uc2e_ev):
-    m2m = getattr(gd['module'], 'm2m_kernel_' + fmm_mat.cfg.kernel_name + str(gd['dim']))
+    m2m = getattr(gd['module'], 'm2m_kernel_' + fmm_mat.cfg.kernel_name)
     n_m2m = gd['m2m_parent_n_idx'][level].shape[0]
     if n_m2m > 0:
         return [m2m(
@@ -254,20 +257,35 @@ def eval_ocl(fmm_mat, input, gpu_data = None):
 
 
 def eval_cpu(fmm_mat, input_vals):
-    n_out = fmm_mat.obs_tree.pts.shape[0] * fmm_mat.cfg.tensor_dim
-    n_multipoles = fmm_mat.src_tree.n_nodes * len(fmm_mat.surf) * fmm_mat.cfg.tensor_dim
+    tensor_dim = fmm_mat.cfg.tensor_dim
+    n_out = fmm_mat.obs_tree.pts.shape[0] * tensor_dim
+    n_multipoles = fmm_mat.src_tree.n_nodes * len(fmm_mat.surf) * tensor_dim
+    n_locals = fmm_mat.obs_tree.n_nodes * len(fmm_mat.surf) * tensor_dim
+
     out = np.zeros(n_out)
+    fmm_mat.p2p_eval(out, input_vals)
+
     m_check = np.zeros(n_multipoles)
     multipoles = np.zeros(n_multipoles)
 
-    fmm_mat.p2p_eval(out, input_vals)
     fmm_mat.p2m_eval(m_check, input_vals)
     fmm_mat.uc2e_eval(multipoles, m_check, 0)
 
     for i in range(1, len(fmm_mat.m2m)):
-        m_check[:] = 0
+        m_check[:] = 0 #TODO: Is this necessary?
         fmm_mat.m2m_eval(m_check, multipoles, i)
         fmm_mat.uc2e_eval(multipoles, m_check, i)
+
+    l_check = np.zeros(n_locals)
+    locals = np.zeros(n_locals)
+    for i in range(0, len(fmm_mat.l2l)):
+        print("hi " + str(i))
+        fmm_mat.l2l_eval(l_check, locals, i)
+        print("hi2 " + str(i))
+        fmm_mat.dc2e_eval(locals, l_check, i)
+
+    print("hi3")
+    fmm_mat.l2p_eval(out, locals)
 
     fmm_mat.m2p_eval(out, multipoles)
     return out

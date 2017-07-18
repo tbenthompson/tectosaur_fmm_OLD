@@ -6,12 +6,12 @@ from tectosaur.util.test_decorators import golden_master
 from tectosaur.farfield import farfield_pts_direct
 
 
-K = 'laplaceS'
+K = 'laplaceS3'
 tensor_dim = 1
 mac = 2.0
 order = 100
 
-# K = 'elasticH'
+# K = 'elasticH3'
 # tensor_dim = 3
 # mac = 3.0
 # order = 100

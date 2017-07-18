@@ -88,6 +88,19 @@ void wrap_dim(py::module& m) {
         .def_property_readonly("kernel_name", &FMMConfig<dim>::kernel_name)
         .def_property_readonly("tensor_dim", &FMMConfig<dim>::tensor_dim);
 
+#define EVALFNC(FNCNAME, OUTNAME, INNAME)\
+        def(#FNCNAME"_eval", [] (FMMMat<dim>& m, NPArrayD OUTNAME, NPArrayD INNAME) {\
+            auto* OUTNAME_ptr = reinterpret_cast<double*>(OUTNAME.request().ptr);\
+            auto* INNAME_ptr = reinterpret_cast<double*>(INNAME.request().ptr);\
+            m.FNCNAME##_matvec(OUTNAME_ptr, INNAME_ptr);\
+        })
+#define EVALFNCLEVEL(FNCNAME, OUTNAME, INNAME)\
+        def(#FNCNAME"_eval", [] (FMMMat<dim>& m, NPArrayD OUTNAME, NPArrayD INNAME, int level) {\
+            auto* OUTNAME_ptr = reinterpret_cast<double*>(OUTNAME.request().ptr);\
+            auto* INNAME_ptr = reinterpret_cast<double*>(INNAME.request().ptr);\
+            m.FNCNAME##_matvec(OUTNAME_ptr, INNAME_ptr, level);\
+        })
+
     py::class_<FMMMat<dim>>(m, "FMMMat")
         .def_readonly("obs_tree", &FMMMat<dim>::obs_tree)
         .def_readonly("src_tree", &FMMMat<dim>::src_tree)
@@ -96,40 +109,34 @@ void wrap_dim(py::module& m) {
         .def_readonly("p2m", &FMMMat<dim>::p2m)
         .def_readonly("m2p", &FMMMat<dim>::m2p)
         .def_readonly("m2m", &FMMMat<dim>::m2m)
+        .def_readonly("l2l", &FMMMat<dim>::m2m)
+        .def_readonly("l2p", &FMMMat<dim>::m2m)
         .def_readonly("cfg", &FMMMat<dim>::cfg)
         .def_readonly("translation_surface_order", &FMMMat<dim>::translation_surface_order)
         .def_readonly("uc2e", &FMMMat<dim>::uc2e)
+        .def_readonly("dc2e", &FMMMat<dim>::uc2e)
         .def_property_readonly("uc2e_ops", [] (FMMMat<dim>& fmm) {
             return make_array<double>(
                 {fmm.uc2e_ops.size()}, reinterpret_cast<double*>(fmm.uc2e_ops.data())
             );
         })
+        .def_property_readonly("dc2e_ops", [] (FMMMat<dim>& fmm) {
+            return make_array<double>(
+                {fmm.dc2e_ops.size()}, reinterpret_cast<double*>(fmm.dc2e_ops.data())
+            );
+        })
         .def_property_readonly("tensor_dim", &FMMMat<dim>::tensor_dim)
-        .def("p2p_eval", [] (FMMMat<dim>& m, NPArrayD out, NPArrayD in) {
-            auto* out_ptr = reinterpret_cast<double*>(out.request().ptr);
-            auto* in_ptr = reinterpret_cast<double*>(in.request().ptr);
-            m.p2p_matvec(out_ptr, in_ptr);
-        })
-        .def("p2m_eval", [] (FMMMat<dim>& m, NPArrayD m_check, NPArrayD in) {
-            auto* m_check_ptr = reinterpret_cast<double*>(m_check.request().ptr);
-            auto* in_ptr = reinterpret_cast<double*>(in.request().ptr);
-            m.p2m_matvec(m_check_ptr, in_ptr);
-        })
-        .def("m2p_eval", [] (FMMMat<dim>& m, NPArrayD out, NPArrayD multipoles) {
-            auto* out_ptr = reinterpret_cast<double*>(out.request().ptr);
-            auto* multipoles_ptr = reinterpret_cast<double*>(multipoles.request().ptr);
-            m.m2p_matvec(out_ptr, multipoles_ptr );
-        })
-        .def("m2m_eval",  [] (FMMMat<dim>& m, NPArrayD m_check, NPArrayD multipoles, int level) {
-            auto* m_check_ptr = reinterpret_cast<double*>(m_check.request().ptr);
-            auto* multipoles_ptr = reinterpret_cast<double*>(multipoles.request().ptr);
-            m.m2m_matvec(m_check_ptr, multipoles_ptr, level);
-        })
-        .def("uc2e_eval",  [] (FMMMat<dim>& m, NPArrayD multipoles, NPArrayD m_check, int level) {
-            auto* multipoles_ptr = reinterpret_cast<double*>(multipoles.request().ptr);
-            auto* m_check_ptr = reinterpret_cast<double*>(m_check.request().ptr);
-            m.uc2e_matvec(multipoles_ptr, m_check_ptr, level);
-        });
+        .EVALFNC(p2p, out, in)
+        .EVALFNC(p2m, m_check, in)
+        .EVALFNC(m2p, out, multipoles)
+        .EVALFNC(l2p, out, locals)
+        .EVALFNCLEVEL(m2m, m_check, multipoles)
+        .EVALFNCLEVEL(uc2e, multipoles, m_check)
+        .EVALFNCLEVEL(l2l, l_check, locals)
+        .EVALFNCLEVEL(dc2e, locals, l_check);
+
+#undef EVALFNC
+#undef EVALFNCLEVEL
 
     m.def("fmmmmmmm", &fmmmmmmm<dim>);
 
@@ -189,6 +196,7 @@ PYBIND11_PLUGIN(fmm) {
         .NPARRAYPROP(src_n_start)
         .NPARRAYPROP(src_n_end)
         .NPARRAYPROP(src_n_idx);
+#undef NPARRAYPROP
 
     return m.ptr();
 }

@@ -7,26 +7,6 @@
 #include "fmm_impl.hpp"
 
 template <size_t dim>
-void p2p(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<dim>& src_n) {
-    mat.p2p.insert(obs_n, src_n);
-}
-
-template <size_t dim>
-void m2p(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<dim>& src_n) {
-    mat.m2p.insert(obs_n, src_n);
-}
-
-template <size_t dim>
-void p2m(FMMMat<dim>& mat, const OctreeNode<dim>& src_n) {
-    mat.p2m.insert(src_n, src_n);
-}
-
-template <size_t dim>
-void m2m(FMMMat<dim>& mat, const OctreeNode<dim>& parent_n, const OctreeNode<dim>& child_n) {
-    mat.m2m[parent_n.height].insert(parent_n, child_n);
-}
-
-template <size_t dim>
 void traverse(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<dim>& src_n) {
     auto r_src = src_n.bounds.R();
     auto r_obs = obs_n.bounds.R();
@@ -44,15 +24,15 @@ void traverse(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<d
         bool small_src = src_n.end - src_n.start < mat.surf.size();
 
         if (small_src) {
-            p2p(mat, obs_n, src_n);
+            mat.p2p.insert(obs_n, src_n);
         } else {
-            m2p(mat, obs_n, src_n);
+            mat.m2p.insert(obs_n, src_n);
         }
         return;
     }
 
     if (src_n.is_leaf && obs_n.is_leaf) {
-        p2p(mat, obs_n, src_n);
+        mat.p2p.insert(obs_n, src_n);
         return;
     }
 
@@ -69,20 +49,33 @@ void traverse(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<d
 }
 
 template <size_t dim>
-void c2e(FMMMat<dim>& mat, const OctreeNode<dim>& node) {
-    mat.uc2e[node.height].insert(node, node);
+void uc2e(FMMMat<dim>& mat, const OctreeNode<dim>& node) {
 }
 
 template <size_t dim>
 void up_collect(FMMMat<dim>& mat, const OctreeNode<dim>& src_n) {
-    c2e(mat, src_n);
+    mat.uc2e[src_n.height].insert(src_n, src_n);
     if (src_n.is_leaf) {
-        p2m(mat, src_n);
+        mat.p2m.insert(src_n, src_n);
     } else {
         for (size_t i = 0; i < OctreeNode<dim>::split; i++) {
-            auto child = mat.src_tree.nodes[src_n.children[i]];
-            up_collect(mat, child);
-            m2m(mat, src_n, child);
+            auto child_n = mat.src_tree.nodes[src_n.children[i]];
+            up_collect(mat, child_n);
+            mat.m2m[src_n.height].insert(src_n, child_n);
+        }
+    }
+}
+
+template <size_t dim>
+void down_collect(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n) {
+    mat.dc2e[obs_n.depth].insert(obs_n, obs_n);
+    if (obs_n.is_leaf) {
+        mat.l2p.insert(obs_n, obs_n);
+    } else {
+        for (size_t i = 0; i < OctreeNode<dim>::split; i++) {
+            auto child_n = mat.obs_tree.nodes[obs_n.children[i]];
+            down_collect(mat, child_n);
+            mat.l2l[child_n.depth].insert(child_n, obs_n);
         }
     }
 }
@@ -148,6 +141,40 @@ void FMMMat<dim>::p2m_matvec(double* out, double *in) {
 }
 
 template <size_t dim>
+void FMMMat<dim>::m2p_matvec(double* out, double* in) {
+    for (size_t i = 0; i < m2p.obs_n_idx.size(); i++) {
+        auto obs_n = obs_tree.nodes[m2p.obs_n_idx[i]];
+        auto src_n = src_tree.nodes[m2p.src_n_idx[i]];
+
+        auto equiv = inscribe_surf(src_n.bounds, cfg.inner_r, surf);
+        interact_pts(
+            cfg, out, in,
+            &obs_tree.pts[obs_n.start], &obs_tree.normals[obs_n.start],
+            obs_n.end - obs_n.start, obs_n.start,
+            equiv.data(), surf.data(),
+            surf.size(), src_n.idx * surf.size()
+        );
+    }
+}
+
+template <size_t dim>
+void FMMMat<dim>::l2p_matvec(double* out, double* in) {
+    for (size_t i = 0; i < l2p.obs_n_idx.size(); i++) {
+        auto obs_n = obs_tree.nodes[l2p.obs_n_idx[i]];
+
+        auto equiv = inscribe_surf(obs_n.bounds, cfg.outer_r, surf);
+        interact_pts(
+            cfg, out, in,
+            &obs_tree.pts[obs_n.start], &obs_tree.normals[obs_n.start],
+            obs_n.end - obs_n.start, obs_n.start,
+            equiv.data(), surf.data(),
+            surf.size(), obs_n.idx * surf.size()
+        );
+    }
+
+}
+
+template <size_t dim>
 void FMMMat<dim>::m2m_matvec(double* out, double *in, int level) {
     for (size_t i = 0; i < m2m[level].obs_n_idx.size(); i++) {
         auto parent_n = src_tree.nodes[m2m[level].obs_n_idx[i]];
@@ -165,18 +192,34 @@ void FMMMat<dim>::m2m_matvec(double* out, double *in, int level) {
 }
 
 template <size_t dim>
-void FMMMat<dim>::m2p_matvec(double* out, double* in) {
-    for (size_t i = 0; i < m2p.obs_n_idx.size(); i++) {
-        auto obs_n = obs_tree.nodes[m2p.obs_n_idx[i]];
-        auto src_n = src_tree.nodes[m2p.src_n_idx[i]];
+void FMMMat<dim>::l2l_matvec(double* out, double* in, int level) {
+    for (size_t i = 0; i < l2l[level].obs_n_idx.size(); i++) {
+        auto child_n = obs_tree.nodes[l2l[level].obs_n_idx[i]];
+        auto parent_n = obs_tree.nodes[l2l[level].src_n_idx[i]];
 
-        auto equiv = inscribe_surf(src_n.bounds, cfg.inner_r, surf);
+        auto check = inscribe_surf(child_n.bounds, cfg.inner_r, surf);
+        auto equiv = inscribe_surf(parent_n.bounds, cfg.outer_r, surf);
         interact_pts(
             cfg, out, in,
-            &obs_tree.pts[obs_n.start], &obs_tree.normals[obs_n.start],
-            obs_n.end - obs_n.start, obs_n.start,
-            equiv.data(), surf.data(),
-            surf.size(), src_n.idx * surf.size()
+            check.data(), surf.data(), 
+            surf.size(), child_n.idx * surf.size(),
+            equiv.data(), surf.data(), 
+            surf.size(), parent_n.idx * surf.size()
+        );
+    }
+}
+
+template <size_t dim>
+void FMMMat<dim>::dc2e_matvec(double* out, double* in, int level) {
+    int n_rows = cfg.tensor_dim() * surf.size();
+    for (size_t i = 0; i < dc2e[level].obs_n_idx.size(); i++) {
+        auto node_idx = dc2e[level].obs_n_idx[i];
+        auto depth = obs_tree.nodes[node_idx].depth;
+        double* op = &dc2e_ops[depth * n_rows * n_rows];
+        matrix_vector_product(
+            op, n_rows, n_rows, 
+            &in[node_idx * n_rows],
+            &out[node_idx * n_rows]
         );
     }
 }
@@ -240,6 +283,24 @@ void build_uc2e(FMMMat<dim>& mat) {
     }
 }
 
+//TODO: This can be refactored to share lots of code with above.
+template <size_t dim>
+void build_dc2e(FMMMat<dim>& mat) {
+    int n_rows = mat.cfg.tensor_dim() * mat.surf.size();
+    mat.dc2e_ops.resize((mat.obs_tree.max_height + 1) * n_rows * n_rows);
+#pragma omp parallel for
+    for (int i = 0; i < mat.obs_tree.max_height + 1; i++) {
+        double width = mat.obs_tree.root().bounds.width / std::pow(2.0, static_cast<double>(i));
+        std::array<double,dim> center{};
+        Cube<dim> bounds(center, width);
+        auto pinv = c2e_solve(mat.surf, bounds, mat.cfg.inner_r, mat.cfg.outer_r, mat.cfg);
+        double* op_start = &mat.dc2e_ops[i * n_rows * n_rows];
+        for (int j = 0; j < n_rows * n_rows; j++) {
+            op_start[j] = pinv[j];
+        }
+    }
+}
+
 template <size_t dim>
 FMMMat<dim> fmmmmmmm(const Octree<dim>& obs_tree, const Octree<dim>& src_tree,
                 const FMMConfig<dim>& cfg) {
@@ -249,10 +310,14 @@ FMMMat<dim> fmmmmmmm(const Octree<dim>& obs_tree, const Octree<dim>& src_tree,
     FMMMat<dim> mat(obs_tree, src_tree, cfg, translation_surf);
 
     mat.m2m.resize(mat.src_tree.max_height + 1);
+    mat.l2l.resize(mat.src_tree.max_height + 1);
     mat.uc2e.resize(mat.src_tree.max_height + 1);
+    mat.dc2e.resize(mat.src_tree.max_height + 1);
 
     build_uc2e(mat);
+    build_dc2e(mat);
     up_collect(mat, mat.src_tree.root());
+    down_collect(mat, mat.src_tree.root());
     traverse(mat, mat.obs_tree.root(), mat.src_tree.root());
 
     return mat;

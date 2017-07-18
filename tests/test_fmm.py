@@ -100,7 +100,8 @@ def check_kernel(K, obs_pts, obs_ns, src_pts, src_ns, est, accuracy = 3):
     check(est, correct, accuracy)
 
 def test_ones(dim):
-    obs_pts, _, src_pts, _, est = run_full(5000, rand_pts(dim), 0.5, 1, "one",[], ocl = True)
+    K = 'one' + str(dim)
+    obs_pts, _, src_pts, _, est = run_full(5000, rand_pts(dim), 0.5, 1, K, [], ocl = False)
     assert(np.all(np.abs(est - src_pts.shape[0]) < 1e-3))
 
 import pytest
@@ -109,32 +110,37 @@ def laplace_kernel(request):
     return request.param
 
 def test_p2p(laplace_kernel, dim):
-    check_kernel(laplace_kernel, *run_full(
-        1000, rand_pts(dim), 2.6, 1, laplace_kernel, [], max_pts_per_cell = 100000,
+    K = laplace_kernel + str(dim)
+    check_kernel(K, *run_full(
+        1000, rand_pts(dim), 2.6, 1, K, [], max_pts_per_cell = 100000,
     ), accuracy = 10)
 
 def test_laplace_all(laplace_kernel, dim):
+    K = laplace_kernel + str(dim)
     np.random.seed(10)
     order = 16 if dim == 2 else 64
-    check_kernel(laplace_kernel, *run_full(
-        10000, rand_pts(dim), 2.6, order, laplace_kernel, [], ocl = True
+    check_kernel(K, *run_full(
+        10000, rand_pts(dim), 2.6, order, K, [], ocl = False
     ), accuracy = 1)
 
 def test_elastic():
     np.random.seed(10)
+    dim = 3
+    K = 'elasticU' + str(dim)
     order = 16 if dim == 2 else 64
-    check_kernel('elasticU', *run_full(
-        4000, rand_pts(3), 2.6, order, 'elasticU', [1.0, 0.25], ocl = False
+    check_kernel(K, *run_full(
+        4000, rand_pts(dim), 2.6, order, K, [1.0, 0.25], ocl = False
     ), accuracy = 1)
 
 def test_m2p(laplace_kernel, dim):
+    K = laplace_kernel + str(dim)
     order = 15 if dim == 2 else 100
-    check_kernel(laplace_kernel, *run_full(
-        10000, m2p_test_pts(dim), 2.6, order, laplace_kernel, [], max_pts_per_cell = 100000
+    check_kernel(K, *run_full(
+        10000, m2p_test_pts(dim), 2.6, order, K, [], max_pts_per_cell = 100000
     ), accuracy = 3)
 
 def test_irregular():
-    K = "laplaceS"
+    K = "laplaceS3"
     check_kernel(K, *run_full(10000, ellipsoid_pts, 2.6, 35, K, []))
 
 if __name__ == '__main__':
