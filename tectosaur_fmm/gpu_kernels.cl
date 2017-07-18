@@ -13,9 +13,6 @@ __constant Real surf[${surf.size}] = {${str(surf.flatten().tolist())[1:-1]}};
 
 // Atomic floating point addition for opencl
 // from: https://streamcomputing.eu/blog/2016-02-09/atomic-operations-for-floats-in-opencl-improved/
-// I was worried this would cause a significant decrease in performance, but
-// it doesn't seem to cause any problems. Probably there are so few conflicts
-// that it's totally fine.
 float atomic_fadd(volatile __global float *addr, float val)
 {
     union{
@@ -227,7 +224,7 @@ ${fmm_op("p2p", "pts", "pts", True)}
 ${fmm_op("s2p", "pts", "surf", False)}
 
 __kernel
-void uc2e_kernel(__global Real* out, __global Real* in,
+void c2e_kernel(__global Real* out, __global Real* in,
         int n_blocks, int n_rows, __global int* node_idx, __global int* node_depth,
         __global Real* ops)
 {

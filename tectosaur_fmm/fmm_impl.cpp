@@ -29,11 +29,9 @@ void traverse(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<d
         } else if (small_obs) {
             mat.m2p.insert(obs_n, src_n);
         } else if (small_src) {
-            mat.m2p.insert(obs_n, src_n);
-            // mat.p2l.insert(obs_n, src_n);
+            mat.p2l.insert(obs_n, src_n);
         } else {
-            mat.m2p.insert(obs_n, src_n);
-            // mat.m2l.insert(obs_n, src_n);
+            mat.m2l.insert(obs_n, src_n);
         }
 
         return;
@@ -58,7 +56,7 @@ void traverse(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<d
 
 template <size_t dim>
 void up_collect(FMMMat<dim>& mat, const OctreeNode<dim>& src_n) {
-    mat.uc2e[src_n.height].insert(src_n, src_n);
+    mat.u2e[src_n.height].insert(src_n, src_n);
     if (src_n.is_leaf) {
         mat.p2m.insert(src_n, src_n);
     } else {
@@ -72,7 +70,7 @@ void up_collect(FMMMat<dim>& mat, const OctreeNode<dim>& src_n) {
 
 template <size_t dim>
 void down_collect(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n) {
-    mat.dc2e[obs_n.depth].insert(obs_n, obs_n);
+    mat.d2e[obs_n.depth].insert(obs_n, obs_n);
     if (obs_n.is_leaf) {
         mat.l2p.insert(obs_n, obs_n);
     } else {
@@ -250,12 +248,12 @@ void FMMMat<dim>::l2p_matvec(double* out, double* in) {
 }
 
 template <size_t dim>
-void FMMMat<dim>::dc2e_matvec(double* out, double* in, int level) {
+void FMMMat<dim>::d2e_matvec(double* out, double* in, int level) {
     int n_rows = cfg.tensor_dim() * surf.size();
-    for (size_t i = 0; i < dc2e[level].obs_n_idx.size(); i++) {
-        auto node_idx = dc2e[level].obs_n_idx[i];
+    for (size_t i = 0; i < d2e[level].obs_n_idx.size(); i++) {
+        auto node_idx = d2e[level].obs_n_idx[i];
         auto depth = obs_tree.nodes[node_idx].depth;
-        double* op = &dc2e_ops[depth * n_rows * n_rows];
+        double* op = &d2e_ops[depth * n_rows * n_rows];
         matrix_vector_product(
             op, n_rows, n_rows, 
             &in[node_idx * n_rows],
@@ -265,12 +263,12 @@ void FMMMat<dim>::dc2e_matvec(double* out, double* in, int level) {
 }
 
 template <size_t dim>
-void FMMMat<dim>::uc2e_matvec(double* out, double* in, int level) {
+void FMMMat<dim>::u2e_matvec(double* out, double* in, int level) {
     int n_rows = cfg.tensor_dim() * surf.size();
-    for (size_t i = 0; i < uc2e[level].src_n_idx.size(); i++) {
-        auto node_idx = uc2e[level].src_n_idx[i];
+    for (size_t i = 0; i < u2e[level].src_n_idx.size(); i++) {
+        auto node_idx = u2e[level].src_n_idx[i];
         auto depth = src_tree.nodes[node_idx].depth;
-        double* op = &uc2e_ops[depth * n_rows * n_rows];
+        double* op = &u2e_ops[depth * n_rows * n_rows];
         matrix_vector_product(
             op, n_rows, n_rows, 
             &in[node_idx * n_rows],
@@ -307,16 +305,16 @@ std::vector<double> c2e_solve(std::vector<std::array<double,dim>> surf,
 }
 
 template <size_t dim>
-void build_uc2e(FMMMat<dim>& mat) {
+void build_u2e(FMMMat<dim>& mat) {
     int n_rows = mat.cfg.tensor_dim() * mat.surf.size();
-    mat.uc2e_ops.resize((mat.src_tree.max_height + 1) * n_rows * n_rows);
+    mat.u2e_ops.resize((mat.src_tree.max_height + 1) * n_rows * n_rows);
 #pragma omp parallel for
     for (int i = 0; i < mat.src_tree.max_height + 1; i++) {
         double width = mat.src_tree.root().bounds.width / std::pow(2.0, static_cast<double>(i));
         std::array<double,dim> center{};
         Cube<dim> bounds(center, width);
         auto pinv = c2e_solve(mat.surf, bounds, mat.cfg.outer_r, mat.cfg.inner_r, mat.cfg);
-        double* op_start = &mat.uc2e_ops[i * n_rows * n_rows];
+        double* op_start = &mat.u2e_ops[i * n_rows * n_rows];
         for (int j = 0; j < n_rows * n_rows; j++) {
             op_start[j] = pinv[j];
         }
@@ -325,16 +323,16 @@ void build_uc2e(FMMMat<dim>& mat) {
 
 //TODO: This can be refactored to share lots of code with above.
 template <size_t dim>
-void build_dc2e(FMMMat<dim>& mat) {
+void build_d2e(FMMMat<dim>& mat) {
     int n_rows = mat.cfg.tensor_dim() * mat.surf.size();
-    mat.dc2e_ops.resize((mat.obs_tree.max_height + 1) * n_rows * n_rows);
+    mat.d2e_ops.resize((mat.obs_tree.max_height + 1) * n_rows * n_rows);
 #pragma omp parallel for
     for (int i = 0; i < mat.obs_tree.max_height + 1; i++) {
         double width = mat.obs_tree.root().bounds.width / std::pow(2.0, static_cast<double>(i));
         std::array<double,dim> center{};
         Cube<dim> bounds(center, width);
         auto pinv = c2e_solve(mat.surf, bounds, mat.cfg.inner_r, mat.cfg.outer_r, mat.cfg);
-        double* op_start = &mat.dc2e_ops[i * n_rows * n_rows];
+        double* op_start = &mat.d2e_ops[i * n_rows * n_rows];
         for (int j = 0; j < n_rows * n_rows; j++) {
             op_start[j] = pinv[j];
         }
@@ -351,11 +349,11 @@ FMMMat<dim> fmmmmmmm(const Octree<dim>& obs_tree, const Octree<dim>& src_tree,
 
     mat.m2m.resize(mat.src_tree.max_height + 1);
     mat.l2l.resize(mat.obs_tree.max_height + 1);
-    mat.uc2e.resize(mat.src_tree.max_height + 1);
-    mat.dc2e.resize(mat.obs_tree.max_height + 1);
+    mat.u2e.resize(mat.src_tree.max_height + 1);
+    mat.d2e.resize(mat.obs_tree.max_height + 1);
 
-    build_uc2e(mat);
-    build_dc2e(mat);
+    build_u2e(mat);
+    build_d2e(mat);
     up_collect(mat, mat.src_tree.root());
     down_collect(mat, mat.obs_tree.root());
     traverse(mat, mat.obs_tree.root(), mat.src_tree.root());
