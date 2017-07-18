@@ -66,13 +66,6 @@ Octree<dim>::Octree(std::array<double,dim>* in_pts, std::array<double,dim>* in_n
     n_pts(n_pts)
 {
     auto pts_normals = combine_pts_normals(in_pts, in_normals, n_pts);
-    size_t n_leaves = n_pts / n_per_cell;
-
-    // For n leaves in a binary tree, there should be ~2*n total nodes. This
-    // will be a comfortable overestimate for an octree. TODO: Is this reserve worth
-    // doing?
-    // allocating 8 * (n / n_per_cell)
-    nodes.reserve(2 * n_leaves);
 
     auto bounds = bounding_box(pts_normals.data(), n_pts);
     add_node(0, n_pts, n_per_cell, 0, bounds, pts_normals);

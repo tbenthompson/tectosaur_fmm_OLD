@@ -1,3 +1,4 @@
+gpu p2l,m2l,l2l,l2p
 redo the analysis of best worker group size, best approx order, best mac with FMM instead of treecode
 
 move fmm_integral_op into this package

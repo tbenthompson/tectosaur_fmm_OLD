@@ -107,7 +107,7 @@ if __name__ == '__main__':
     np.random.seed(10)
     # N = 1000000
     # data = random_data(N)
-    N = 1000000
+    N = 10000000
     data = ellipsoid_pts(N)
     # N = int(1e7 ** (1.0 / 3.0))
     # data = grid_data(N)
