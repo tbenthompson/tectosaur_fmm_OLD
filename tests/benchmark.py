@@ -73,13 +73,11 @@ def fmm_runner(pts, ns, input):
     t.report('setup fmm')
     fmm.report_p2p_vs_m2p(fmm_mat)
     t.report('report')
-    import sys;sys.exit()
 
     gpu_data = fmm.data_to_gpu(fmm_mat, input_tree)
     t.report('data to gpu')
 
-    # output = fmm.eval_ocl(fmm_mat, input_tree, gpu_data)
-    output = fmm.eval_cpu(fmm_mat, input_tree)
+    output = fmm.eval_ocl(fmm_mat, input_tree, gpu_data)
     t.report('eval fmm')
 
     output = output.reshape((-1, tensor_dim))
@@ -107,10 +105,10 @@ if __name__ == '__main__':
     np.random.seed(10)
     # N = 1000000
     # data = random_data(N)
-    N = 10000000
-    data = ellipsoid_pts(N)
-    # N = int(1e7 ** (1.0 / 3.0))
-    # data = grid_data(N)
+    # N = 1000000
+    # data = ellipsoid_pts(N)
+    N = int(1e6 ** (1.0 / 3.0))
+    data = grid_data(N)
     A = fmm_runner(*data).flatten()
     B = direct_runner(*data)
     check(A, B)

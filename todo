@@ -19,6 +19,8 @@ use symmetry in the appropriate kernels
 
 
 NOT NOW:
+faster p2m, m2m, uc2e, l2l, dc2e, l2p?
+
 write a script to gather performance counters for opencl
 http://docs.nvidia.com/cuda/profiler-users-guide/#command-line-profiler-options
 

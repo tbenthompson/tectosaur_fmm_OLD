@@ -29,9 +29,11 @@ void traverse(FMMMat<dim>& mat, const OctreeNode<dim>& obs_n, const OctreeNode<d
         } else if (small_obs) {
             mat.m2p.insert(obs_n, src_n);
         } else if (small_src) {
-            mat.p2l.insert(obs_n, src_n);
+            mat.m2p.insert(obs_n, src_n);
+            // mat.p2l.insert(obs_n, src_n);
         } else {
-            mat.m2l.insert(obs_n, src_n);
+            mat.m2p.insert(obs_n, src_n);
+            // mat.m2l.insert(obs_n, src_n);
         }
 
         return;

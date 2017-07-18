@@ -13,10 +13,6 @@ fmm = cppimport.imp("tectosaur_fmm.fmm").fmm
 for k in dir(fmm):
     locals()[k] = getattr(fmm, k)
 
-if 'profile' not in __builtins__:
-    def profile(f):
-        return f
-
 n_workers_per_block = 128
 
 def get_gpu_module(surf, K):
@@ -144,34 +140,33 @@ def data_to_gpu(fmm_mat, input_vals):
 
 
 def gpu_p2p(fmm_mat, gd):
-    p2p = getattr(gd['module'], 'p2p_kernel_' + fmm_mat.cfg.kernel_name)
+    p2p = getattr(gd['module'], 'p2p_' + fmm_mat.cfg.kernel_name)
     n_p2p = gd['p2p_obs_n_start'].shape[0]
     return [p2p(
         gpu.gpu_queue,
         (n_p2p * n_workers_per_block,),
         (n_workers_per_block,),
         gd['out'].data, gd['in'].data,
-        np.int32(n_p2p), gd['p2p_obs_n_start'].data, gd['p2p_obs_n_end'].data,
-        gd['p2p_src_n_start'].data, gd['p2p_src_n_end'].data,
+        np.int32(n_p2p), gd['params'].data,
+        gd['p2p_obs_n_start'].data, gd['p2p_obs_n_end'].data,
         gd['obs_pts'].data, gd['obs_normals'].data,
-        gd['src_pts'].data, gd['src_normals'].data,
-        gd['params'].data
+        gd['p2p_src_n_start'].data, gd['p2p_src_n_end'].data,
+        gd['src_pts'].data, gd['src_normals'].data
     )]
 
 def gpu_m2p(fmm_mat, gd, uc2e_ev):
-    m2p = getattr(gd['module'], 'm2p_kernel_' + fmm_mat.cfg.kernel_name)
+    m2p = getattr(gd['module'], 's2p_' + fmm_mat.cfg.kernel_name)
     n_m2p = gd['m2p_obs_n_start'].shape[0]
     if n_m2p > 0:
         return [m2p(
             gpu.gpu_queue,
             (n_m2p * n_workers_per_block,),
             (n_workers_per_block,),
-            gd['out'].data, gd['multipoles'].data,
-            np.int32(n_m2p), gd['m2p_obs_n_start'].data, gd['m2p_obs_n_end'].data,
-            gd['m2p_src_n_idx'].data,
-            gd['src_n_center'].data, gd['src_n_width'].data, float_type(fmm_mat.cfg.inner_r),
+            gd['out'].data, gd['multipoles'].data, np.int32(n_m2p), gd['params'].data,
+            gd['m2p_obs_n_start'].data, gd['m2p_obs_n_end'].data,
             gd['obs_pts'].data, gd['obs_normals'].data,
-            gd['params'].data,
+            gd['m2p_src_n_idx'].data, gd['src_n_center'].data,
+            gd['src_n_width'].data, float_type(fmm_mat.cfg.inner_r),
             wait_for = uc2e_ev
         )]
     else:
@@ -179,7 +174,7 @@ def gpu_m2p(fmm_mat, gd, uc2e_ev):
 
 
 def gpu_p2m(fmm_mat, gd):
-    p2m = getattr(gd['module'], 'p2m_kernel_' + fmm_mat.cfg.kernel_name)
+    p2m = getattr(gd['module'], 'p2s_' + fmm_mat.cfg.kernel_name)
     n_p2m = gd['p2m_parent_n_start'].shape[0]
     if n_p2m > 0:
         return [p2m(
@@ -187,17 +182,17 @@ def gpu_p2m(fmm_mat, gd):
             (n_p2m * n_workers_per_block,),
             (n_workers_per_block,),
             gd['m_check'].data, gd['in'].data,
-            np.int32(n_p2m), gd['p2m_parent_n_start'].data, gd['p2m_parent_n_end'].data,
-            gd['p2m_parent_n_idx'].data,
-            gd['src_n_center'].data, gd['src_n_width'].data, float_type(fmm_mat.cfg.outer_r),
-            gd['src_pts'].data, gd['src_normals'].data,
-            gd['params'].data
+            np.int32(n_p2m), gd['params'].data,
+            gd['p2m_parent_n_idx'].data, gd['src_n_center'].data,
+            gd['src_n_width'].data, float_type(fmm_mat.cfg.outer_r),
+            gd['p2m_parent_n_start'].data, gd['p2m_parent_n_end'].data,
+            gd['src_pts'].data, gd['src_normals'].data
         )]
     else:
         return None
 
 def gpu_m2m(fmm_mat, gd, level, uc2e_ev):
-    m2m = getattr(gd['module'], 'm2m_kernel_' + fmm_mat.cfg.kernel_name)
+    m2m = getattr(gd['module'], 's2s_' + fmm_mat.cfg.kernel_name)
     n_m2m = gd['m2m_parent_n_idx'][level].shape[0]
     if n_m2m > 0:
         return [m2m(
@@ -205,10 +200,11 @@ def gpu_m2m(fmm_mat, gd, level, uc2e_ev):
             (n_m2m * n_workers_per_block,),
             (n_workers_per_block,),
             gd['m_check'].data, gd['multipoles'].data,
-            np.int32(n_m2m), gd['m2m_parent_n_idx'][level].data, gd['m2m_child_n_idx'][level].data,
-            gd['src_n_center'].data, gd['src_n_width'].data,
-            float_type(fmm_mat.cfg.inner_r), float_type(fmm_mat.cfg.outer_r),
-            gd['params'].data,
+            np.int32(n_m2m), gd['params'].data,
+            gd['m2m_parent_n_idx'][level].data, gd['src_n_center'].data,
+            gd['src_n_width'].data, float_type(fmm_mat.cfg.outer_r),
+            gd['m2m_child_n_idx'][level].data, gd['src_n_center'].data,
+            gd['src_n_width'].data, float_type(fmm_mat.cfg.inner_r),
             wait_for = uc2e_ev
         )]
     else:
@@ -233,47 +229,106 @@ def gpu_uc2e(fmm_mat, gd, level, m2m_ev):
     else:
         return None
 
-def print_timing(p2p_ev, m2m_evs, uc2e_evs, m2p_ev):
+def print_timing(p2m_ev, m2m_evs, uc2e_evs,
+        p2l_ev, m2l_ev, l2l_evs, dc2e_evs,
+        p2p_ev, m2p_ev, l2p_ev):
+
     def get_time(ev):
         if ev is not None:
             return (ev[0].profile.end - ev[0].profile.start) * 1e-9
         return 0
 
-    p2p_t = get_time(p2p_ev)
-    m2p_t = get_time(m2p_ev)
-    m2m_t = sum([get_time(level) for level in m2m_evs])
-    uc2e_t = sum([get_time(level) for level in m2m_evs])
-    print('p2p took ' + str(p2p_t))
-    print('m2p took ' + str(m2p_t))
-    print('m2m took ' + str(m2m_t))
-    print('uc2e took ' + str(uc2e_t))
+    print('p2m took ' + str(get_time(p2m_ev)))
+    print('m2m took ' + str(sum([get_time(level) for level in m2m_evs])))
+    print('uc2e took ' + str(sum([get_time(level) for level in m2m_evs])))
+    print('p2l took ' + str(get_time(p2l_ev)))
+    print('m2l took ' + str(get_time(m2l_ev)))
+    print('l2l took ' + str(sum([get_time(level) for level in l2l_evs])))
+    print('dc2e took ' + str(sum([get_time(level) for level in dc2e_evs])))
+    print('p2p took ' + str(get_time(p2p_ev)))
+    print('m2p took ' + str(get_time(m2p_ev)))
+    print('l2p took ' + str(get_time(l2p_ev)))
+
+def gpu_dc2e(fmm_mat, gd, level, m2m_ev):
+    dc2e = gd['module'].dc2e_kernel
+    n_dc2e = gd['dc2e_node_n_idx'][level].shape[0]
+    n_dc2e_rows = gd['tensor_dim'] * gd['n_surf_pts']
+    if n_dc2e > 0:
+        return [dc2e(
+            gpu.gpu_queue,
+            (n_dc2e * n_workers_per_block,),
+            (n_workers_per_block,),
+            gd['locals'].data, gd['l_check'].data,
+            np.int32(n_dc2e), np.int32(n_dc2e_rows),
+            gd['dc2e_node_n_idx'][level].data,
+            gd['dc2e_node_depth'].data,
+            gd['dc2e_ops'].data,
+            wait_for = m2m_ev
+        )]
+    else:
+        return None
+
+def gpu_p2l(fmm_mat, gd):
+    return None
+
+def gpu_m2l(fmm_mat, gd, uc2e_ev):
+    return None
+
+def gpu_dc2e(fmm_mat, gd, level, m2l_p2l_evs):
+    return None
+
+def gpu_l2l(fmm_mat, gd, level, dc2e_ev):
+    return None
+
+def gpu_l2p(fmm_mat, gd, dc2e_ev):
+    return None
 
 def eval_ocl(fmm_mat, input, gpu_data = None):
     if gpu_data is None:
         gpu_data = data_to_gpu(fmm_mat, input)
 
     p2p_ev = gpu_p2p(fmm_mat, gpu_data)
+    p2l_ev = gpu_p2l(fmm_mat, gpu_data)
+    p2m_ev = gpu_p2m(fmm_mat, gpu_data)
 
     m2m_evs = []
     uc2e_evs = []
-    m2m_evs.append(gpu_p2m(fmm_mat, gpu_data))
-    uc2e_evs.append(gpu_uc2e(fmm_mat, gpu_data, 0, m2m_evs[0]))
+    uc2e_evs.append(gpu_uc2e(fmm_mat, gpu_data, 0, p2m_ev))
 
     for i in range(1, len(fmm_mat.m2m)):
         m2m_evs.append(gpu_m2m(fmm_mat, gpu_data, i, uc2e_evs[i - 1]))
-        uc2e_evs.append(gpu_uc2e(fmm_mat, gpu_data, i, m2m_evs[i]))
+        uc2e_evs.append(gpu_uc2e(fmm_mat, gpu_data, i, m2m_evs[i - 1]))
 
+    m2l_ev = gpu_m2l(fmm_mat, gpu_data, uc2e_evs[-1])
     m2p_ev = gpu_m2p(fmm_mat, gpu_data, uc2e_evs[-1])
+
+    l2l_evs = []
+    dc2e_evs = []
+    dc2e_wait_for = sum([L if L is not None else [] for L in [m2l_ev, p2l_ev]], [])
+    dc2e_evs.append(gpu_dc2e(fmm_mat, gpu_data, 0, dc2e_wait_for))
+
+    for i in range(1, len(fmm_mat.l2l)):
+        l2l_evs.append(gpu_l2l(fmm_mat, gpu_data, i, dc2e_evs[i - 1]))
+        dc2e_evs.append(gpu_dc2e(fmm_mat, gpu_data, i, l2l_evs[i - 1]))
+
+    l2p_ev = gpu_l2p(fmm_mat, gpu_data, dc2e_evs[-1])
+
+    if l2p_ev is not None:
+        l2p_ev[0].wait()
     if m2p_ev is not None:
         m2p_ev[0].wait()
+    if p2p_ev is not None:
+        p2p_ev[0].wait()
 
-    p2p_ev[0].wait()
     retval = gpu_data['out'].get()
 
-    print_timing(p2p_ev, m2m_evs, uc2e_evs, m2p_ev)
+    print_timing(
+        p2m_ev, m2m_evs, uc2e_evs,
+        p2l_ev, m2l_ev, l2l_evs, dc2e_evs,
+        p2p_ev, m2p_ev, l2p_ev
+    )
 
     return retval
-
 
 def eval_cpu(fmm_mat, input_vals):
     tensor_dim = fmm_mat.cfg.tensor_dim
