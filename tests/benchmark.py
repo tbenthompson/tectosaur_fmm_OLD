@@ -11,10 +11,10 @@ tensor_dim = 1
 mac = 2.0
 order = 100
 
-K = 'elasticH3'
-tensor_dim = 3
-mac = 3.0
-order = 100
+# K = 'elasticH3'
+# tensor_dim = 3
+# mac = 3.0
+# order = 100
 
 params = [1.0, 0.25]
 
@@ -59,7 +59,7 @@ def direct_runner(pts, ns, input):
 def fmm_runner(pts, ns, input):
     t = Timer()
 
-    pts_per_cell = 500
+    pts_per_cell = 300
 
     tree = fmm.three.Octree(pts, ns, pts_per_cell)
     t.report('build tree')
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     # data = random_data(N)
     # N = 10000000
     # data = ellipsoid_pts(N)
-    N = int(1e6 ** (1.0 / 3.0))
+    N = int(1e5 ** (1.0 / 3.0))
     data = grid_data(N)
     A = fmm_runner(*data).flatten()
     # B = direct_runner(*data)

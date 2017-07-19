@@ -2,15 +2,6 @@ move fmm_integral_op into this package
 use FMM for okada -- just try it out first, make sure its accurate.
 read about the implementation of the high-performance volumetric integration tools.
 
-get rid of the error about Wstrict-prototypes: https://stackoverflow.com/questions/8106258/cc1plus-warning-command-line-option-wstrict-prototypes-is-valid-for-ada-c-o
-
-use homogeneity in the p2m, so that cells can be any size and I could go back to using a kdtree or other data structure, so long as all cells have spherical bounds.  since i'm not using the relative positions of cells, i could use shrinked octree node bounds.
-
-use symmetry in the appropriate kernels
-
-
-
-
 
 
 NOT NOW:
@@ -29,3 +20,10 @@ optimize memory usage
 profile the data transfer code, where's the slow stuff.
 
 the p2p kernel is not so good when the cells are small
+
+clean up the duplication between d2e and c2e
+
+use homogeneity in the p2m, so that cells can be any size and I could go back to using a kdtree or other data structure, so long as all cells have spherical bounds.  since i'm not using the relative positions of cells, i could use shrinked octree node bounds.
+use a kdtree!
+
+use symmetry in the appropriate kernels

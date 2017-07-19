@@ -1,7 +1,7 @@
 import numpy as np
 import os
 
-from cppimport import setup_pybind11
+from cppimport import setup_pybind11, turn_off_strict_prototypes
 
 import tectosaur
 import tectosaur_fmm
@@ -29,7 +29,6 @@ def template_kernels(cfg):
         dirname = os.path.dirname(t)
         filename, ext = os.path.splitext(t)
         out_filename = os.path.join(fmm_dir, filename + '.' + ext[2:])
-        print(out_filename)
         with open(out_filename, 'w') as f:
             f.write(code)
 
@@ -50,6 +49,7 @@ def to_fmm_dir(filenames):
     return [os.path.join(tectosaur_fmm.source_dir, fname) for fname in filenames]
 
 def lib_cfg(cfg):
+    turn_off_strict_prototypes()
     setup_pybind11(cfg)
     cfg['compiler_args'] += [
         '-std=c++14', '-O3', '-g', '-Wall', '-Werror', '-fopenmp', '-UNDEBUG', '-DDEBUG'
