@@ -101,7 +101,7 @@ def check_kernel(K, obs_pts, obs_ns, src_pts, src_ns, est, accuracy = 3):
 
 def test_ones(dim):
     K = 'one' + str(dim)
-    obs_pts, _, src_pts, _, est = run_full(5000, rand_pts(dim), 0.5, 1, K, [], ocl = False)
+    obs_pts, _, src_pts, _, est = run_full(5000, rand_pts(dim), 0.5, 1, K, [], ocl = True)
     assert(np.all(np.abs(est - src_pts.shape[0]) < 1e-3))
 
 import pytest
@@ -120,7 +120,7 @@ def test_laplace_all(laplace_kernel, dim):
     np.random.seed(10)
     order = 16 if dim == 2 else 64
     check_kernel(K, *run_full(
-        10000, rand_pts(dim), 2.6, order, K, [], ocl = False
+        10000, rand_pts(dim), 2.6, order, K, [], ocl = True
     ), accuracy = 1)
 
 def test_elastic():

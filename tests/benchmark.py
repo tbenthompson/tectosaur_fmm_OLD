@@ -1,8 +1,8 @@
 import numpy as np
 import tectosaur_fmm.fmm_wrapper as fmm
-from tectosaur.util.timer import Timer
 from tectosaur.util.test_decorators import golden_master
 
+from tectosaur.util.timer import Timer
 from tectosaur.farfield import farfield_pts_direct
 
 
@@ -59,7 +59,7 @@ def direct_runner(pts, ns, input):
 def fmm_runner(pts, ns, input):
     t = Timer()
 
-    pts_per_cell = 300
+    pts_per_cell = 500
 
     tree = fmm.three.Octree(pts, ns, pts_per_cell)
     t.report('build tree')
@@ -86,15 +86,6 @@ def fmm_runner(pts, ns, input):
     t.report('map to input space')
     return to_orig
 
-@golden_master(6)
-def test_benchmark(request):
-    global N
-    N = 100000
-    data = random_data(N)
-    out = fmm_runner(*data)
-    print(out / np.max(np.abs(out)))
-    return out / np.max(np.abs(out))
-
 def check(A, B):
     L2B = np.sqrt(np.sum(B ** 2))
     L2Diff = np.sqrt(np.sum((A - B) ** 2))
@@ -105,10 +96,10 @@ if __name__ == '__main__':
     np.random.seed(10)
     # N = 1000000
     # data = random_data(N)
-    N = 1000000
-    data = ellipsoid_pts(N)
-    # N = int(1e6 ** (1.0 / 3.0))
-    # data = grid_data(N)
+    # N = 10000000
+    # data = ellipsoid_pts(N)
+    N = int(1e6 ** (1.0 / 3.0))
+    data = grid_data(N)
     A = fmm_runner(*data).flatten()
     # B = direct_runner(*data)
     # check(A, B)
