@@ -83,7 +83,7 @@ def report_p2p_vs_m2p(fmm_mat):
     print('total l2p interactions: %e' % l2p_i)
 
 @profile
-def data_to_gpu(fmm_mat, input_vals):
+def data_to_gpu(fmm_mat):
     src_tree_nodes = fmm_mat.src_tree.nodes
     obs_tree_nodes = fmm_mat.obs_tree.nodes
 
@@ -113,7 +113,6 @@ def data_to_gpu(fmm_mat, input_vals):
     gd['n_locals'] = gd['n_surf_dofs'] * len(obs_tree_nodes)
 
     gd['out'] = gpu.zeros_gpu(fmm_mat.cfg.tensor_dim * gd['obs_pts'].shape[0], float_type)
-    gd['in'] = gpu.to_gpu(input_vals, float_type)
     gd['m_check'] = gpu.zeros_gpu(gd['n_multipoles'], float_type)
     gd['multipoles'] = gpu.zeros_gpu(gd['n_multipoles'], float_type)
     gd['l_check'] = gpu.zeros_gpu(gd['n_locals'], float_type)
@@ -308,7 +307,9 @@ def print_timing(p2m_ev, m2m_evs, u2e_evs,
 
 def eval_ocl(fmm_mat, input, gpu_data = None, should_print_timing = True):
     if gpu_data is None:
-        gpu_data = data_to_gpu(fmm_mat, input)
+        gpu_data = data_to_gpu(fmm_mat)
+
+    gpu_data['in'] = gpu.to_gpu(input, float_type)
 
     p2p_ev = gpu_p2p(fmm_mat, gpu_data)
     p2l_ev = gpu_p2l(fmm_mat, gpu_data)

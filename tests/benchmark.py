@@ -74,7 +74,7 @@ def fmm_runner(pts, ns, input):
     fmm.report_p2p_vs_m2p(fmm_mat)
     t.report('report')
 
-    gpu_data = fmm.data_to_gpu(fmm_mat, input_tree)
+    gpu_data = fmm.data_to_gpu(fmm_mat)
     t.report('data to gpu')
 
     output = fmm.eval_ocl(fmm_mat, input_tree, gpu_data)
