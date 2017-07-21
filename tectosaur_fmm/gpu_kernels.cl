@@ -183,7 +183,7 @@ for (int chunk_j = 0; chunk_j < chunk_j_max; chunk_j++) {
     % for d in range(K.tensor_dim):
     {
         __global Real* dest = &out[(${out_idx}) * ${K.tensor_dim} + ${d}];
-        (*dest) += atomic_fadd(dest, sum${dn(d)});
+        atomic_fadd(dest, sum${dn(d)});
     }
     % endfor
 </%def>

@@ -6,15 +6,15 @@ from tectosaur.util.timer import Timer
 from tectosaur.farfield import farfield_pts_direct
 
 
-K = 'laplaceS3'
-tensor_dim = 1
-mac = 2.0
-order = 100
-
-# K = 'elasticH3'
-# tensor_dim = 3
-# mac = 3.0
+# K = 'laplaceS3'
+# tensor_dim = 1
+# mac = 2.0
 # order = 100
+
+K = 'elasticT3'
+tensor_dim = 3
+mac = 3.0
+order = 100
 
 params = [1.0, 0.25]
 
@@ -52,7 +52,7 @@ def grid_data(N):
 
 def direct_runner(pts, ns, input):
     t = Timer()
-    out_direct = farfield_pts_direct(K, pts, ns, pts, ns, input, params)
+    out_direct = farfield_pts_direct(K, pts, ns, pts, ns, input.flatten(), params)
     t.report('eval direct')
     return out_direct
 
@@ -71,7 +71,7 @@ def fmm_runner(pts, ns, input):
         tree, tree, fmm.three.FMMConfig(1.1, mac, order, K, params)
     )
     t.report('setup fmm')
-    fmm.report_p2p_vs_m2p(fmm_mat)
+    fmm.report_interactions(fmm_mat)
     t.report('report')
 
     gpu_data = fmm.data_to_gpu(fmm_mat)
@@ -98,8 +98,8 @@ if __name__ == '__main__':
     # data = random_data(N)
     # N = 10000000
     # data = ellipsoid_pts(N)
-    N = int(1e5 ** (1.0 / 3.0))
+    N = int(3e5 ** (1.0 / 3.0))
     data = grid_data(N)
     A = fmm_runner(*data).flatten()
-    # B = direct_runner(*data)
-    # check(A, B)
+    B = direct_runner(*data)
+    check(A, B)

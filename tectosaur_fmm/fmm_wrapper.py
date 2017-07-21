@@ -2,6 +2,7 @@ import numpy as np
 
 import tectosaur.util.gpu as gpu
 from tectosaur.util.timer import Timer
+from tectosaur import setup_logger
 
 import tectosaur_fmm
 from tectosaur_fmm.cfg import float_type
@@ -10,13 +11,12 @@ from tectosaur.kernels import kernels
 import cppimport
 fmm = cppimport.imp("tectosaur_fmm.fmm").fmm
 
+logger = setup_logger(__name__)
+
 for k in dir(fmm):
     locals()[k] = getattr(fmm, k)
 
 n_workers_per_block = 128
-
-if 'profile' not in __builtins__:
-    __builtins__['profile'] = lambda x: x
 
 def get_gpu_module(surf, K):
     args = dict(
@@ -31,7 +31,7 @@ def get_gpu_module(surf, K):
     )
     return gpu_module
 
-def report_p2p_vs_m2p(fmm_mat):
+def report_interactions(fmm_mat):
     surf_n = len(fmm_mat.surf)
 
     starts = fmm_mat.p2m.src_n_start
@@ -71,18 +71,19 @@ def report_p2p_vs_m2p(fmm_mat):
     tree_i = p2p_i + m2p_i + p2m_i + m2m_i + m2l_i + l2l_i + l2p_i + p2l_i
     direct_i = len(fmm_mat.obs_tree.pts) * len(fmm_mat.src_tree.pts)
 
-    print('compression factor: ' + str(tree_i / direct_i))
-    print('total tree interactions: %e' % tree_i)
-    print('total p2m interactions: %e' % p2m_i)
-    print('total m2m interactions: %e' % m2m_i)
-    print('total p2l interactions: %e' % p2l_i)
-    print('total m2l interactions: %e' % m2l_i)
-    print('total l2l interactions: %e' % l2l_i)
-    print('total p2p interactions: %e' % p2p_i)
-    print('total m2p interactions: %e' % m2p_i)
-    print('total l2p interactions: %e' % l2p_i)
+    logger.debug('compression factor: ' + str(tree_i / direct_i))
+    logger.debug('# obs pts: ' + str(fmm_mat.obs_tree.pts.shape[0]))
+    logger.debug('# src pts: ' + str(fmm_mat.src_tree.pts.shape[0]))
+    logger.debug('total tree interactions: %e' % tree_i)
+    logger.debug('total p2m interactions: %e' % p2m_i)
+    logger.debug('total m2m interactions: %e' % m2m_i)
+    logger.debug('total p2l interactions: %e' % p2l_i)
+    logger.debug('total m2l interactions: %e' % m2l_i)
+    logger.debug('total l2l interactions: %e' % l2l_i)
+    logger.debug('total p2p interactions: %e' % p2p_i)
+    logger.debug('total m2p interactions: %e' % m2p_i)
+    logger.debug('total l2p interactions: %e' % l2p_i)
 
-@profile
 def data_to_gpu(fmm_mat):
     src_tree_nodes = fmm_mat.src_tree.nodes
     obs_tree_nodes = fmm_mat.obs_tree.nodes
@@ -105,18 +106,20 @@ def data_to_gpu(fmm_mat):
     gd['src_pts'] = gpu.to_gpu(fmm_mat.src_tree.pts, float_type)
     gd['src_normals'] = gpu.to_gpu(fmm_mat.src_tree.normals, float_type)
 
+    gd['tensor_dim'] = fmm_mat.cfg.tensor_dim
     gd['n_surf_pts'] = np.int32(surf.shape[0])
-    gd['n_surf_dofs'] = gd['n_surf_pts'] * fmm_mat.cfg.tensor_dim
+    gd['n_surf_dofs'] = gd['n_surf_pts'] * gd['tensor_dim']
     gd['params'] = gpu.to_gpu(np.array(fmm_mat.cfg.params), float_type)
 
     gd['n_multipoles'] = gd['n_surf_dofs'] * len(src_tree_nodes)
     gd['n_locals'] = gd['n_surf_dofs'] * len(obs_tree_nodes)
 
-    gd['out'] = gpu.zeros_gpu(fmm_mat.cfg.tensor_dim * gd['obs_pts'].shape[0], float_type)
-    gd['m_check'] = gpu.zeros_gpu(gd['n_multipoles'], float_type)
-    gd['multipoles'] = gpu.zeros_gpu(gd['n_multipoles'], float_type)
-    gd['l_check'] = gpu.zeros_gpu(gd['n_locals'], float_type)
-    gd['locals'] = gpu.zeros_gpu(gd['n_locals'], float_type)
+    gd['in'] = gpu.empty_gpu(gd['tensor_dim'] * gd['src_pts'].shape[0], float_type)
+    gd['out'] = gpu.empty_gpu(gd['tensor_dim'] * gd['obs_pts'].shape[0], float_type)
+    gd['m_check'] = gpu.empty_gpu(gd['n_multipoles'], float_type)
+    gd['multipoles'] = gpu.empty_gpu(gd['n_multipoles'], float_type)
+    gd['l_check'] = gpu.empty_gpu(gd['n_locals'], float_type)
+    gd['locals'] = gpu.empty_gpu(gd['n_locals'], float_type)
 
     for name, tree in [('src', src_tree_nodes), ('obs', obs_tree_nodes)]:
         gd[name + '_n_center'] = gpu.to_gpu(
@@ -294,22 +297,30 @@ def print_timing(p2m_ev, m2m_evs, u2e_evs,
             return (ev.profile.end - ev.profile.start) * 1e-9
         return 0
 
-    print('p2m took ' + str(get_time(p2m_ev)))
-    print('m2m took ' + str(sum([get_time(level) for level in m2m_evs])))
-    print('u2e took ' + str(sum([get_time(level) for level in u2e_evs])))
-    print('p2l took ' + str(get_time(p2l_ev)))
-    print('m2l took ' + str(get_time(m2l_ev)))
-    print('l2l took ' + str(sum([get_time(level) for level in l2l_evs])))
-    print('d2e took ' + str(sum([get_time(level) for level in d2e_evs])))
-    print('p2p took ' + str(get_time(p2p_ev)))
-    print('m2p took ' + str(get_time(m2p_ev)))
-    print('l2p took ' + str(get_time(l2p_ev)))
+    logger.debug('p2m took ' + str(get_time(p2m_ev)))
+    logger.debug('m2m took ' + str(sum([get_time(level) for level in m2m_evs])))
+    logger.debug('u2e took ' + str(sum([get_time(level) for level in u2e_evs])))
+    logger.debug('p2l took ' + str(get_time(p2l_ev)))
+    logger.debug('m2l took ' + str(get_time(m2l_ev)))
+    logger.debug('l2l took ' + str(sum([get_time(level) for level in l2l_evs])))
+    logger.debug('d2e took ' + str(sum([get_time(level) for level in d2e_evs])))
+    logger.debug('p2p took ' + str(get_time(p2p_ev)))
+    logger.debug('m2p took ' + str(get_time(m2p_ev)))
+    logger.debug('l2p took ' + str(get_time(l2p_ev)))
 
-def eval_ocl(fmm_mat, input, gpu_data = None, should_print_timing = True):
+def prep_data_for_eval(gd, input_vals):
+    gd['in'][:] = input_vals.astype(float_type).flatten()
+    gd['out'][:] = 0
+    gd['m_check'][:] = 0
+    gd['multipoles'][:] = 0
+    gd['l_check'][:] = 0
+    gd['locals'][:] = 0
+
+def eval_ocl(fmm_mat, input_vals, gpu_data = None, should_print_timing = True):
     if gpu_data is None:
         gpu_data = data_to_gpu(fmm_mat)
 
-    gpu_data['in'] = gpu.to_gpu(input, float_type)
+    prep_data_for_eval(gpu_data, input_vals)
 
     p2p_ev = gpu_p2p(fmm_mat, gpu_data)
     p2l_ev = gpu_p2l(fmm_mat, gpu_data)
