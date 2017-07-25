@@ -143,6 +143,13 @@ def data_to_gpu(fmm_mat):
     gd['d2e_node_depth'] = gpu.to_gpu(np.array([n.depth for n in obs_tree_nodes]), np.int32)
     gd['d2e_ops'] = gpu.to_gpu(fmm_mat.d2e_ops, float_type)
 
+    gd['dry_run'] = True
+    eval_ocl(
+        fmm_mat, np.zeros(gd['src_pts'].shape[0] * gd['tensor_dim']),
+        gpu_data = gd, should_print_timing = False
+    )
+    gd['dry_run'] = False
+
     return gd
 
 def get_op(op_name, gd):
@@ -191,13 +198,14 @@ def gpu_fmm_op(op_name, out_name, in_name, obs_type, src_type, gd, wait_for):
     src_data = get_data(op_name, 'src', src_type, gd)
 
     n_blocks = get_n_blocks(op_name, obs_type, gd)
-    if n_blocks > 0:
+    pt_data = [d.data for d in obs_data] + [d.data for d in src_data]
+    if n_blocks > 0 and gd['dry_run'] is False:
         return op(
             gpu.gpu_queue,
             (n_blocks * n_workers_per_block,), (n_workers_per_block,),
             gd[out_name].data, gd[in_name].data,
             np.int32(n_blocks), gd['params'].data,
-            *[d.data for d in obs_data], *[d.data for d in src_data],
+            *pt_data,
             wait_for = wait_for
         )
     else:
@@ -254,7 +262,7 @@ def gpu_d2e(fmm_mat, gd, level, evs):
     c2e = gd['module'].c2e_kernel
     n_d2e = gd['d2e_node_n_idx'][level].shape[0]
     n_d2e_rows = gd['n_surf_dofs']
-    if n_d2e > 0:
+    if n_d2e > 0 and gd['dry_run'] is False:
         return c2e(
             gpu.gpu_queue,
             (n_d2e * n_workers_per_block,),
@@ -273,7 +281,7 @@ def gpu_u2e(fmm_mat, gd, level, m2m_ev):
     c2e = gd['module'].c2e_kernel
     n_u2e = gd['u2e_node_n_idx'][level].shape[0]
     n_u2e_rows = gd['n_surf_dofs']
-    if n_u2e > 0:
+    if n_u2e > 0 and gd['dry_run'] is False:
         return c2e(
             gpu.gpu_queue,
             (n_u2e * n_workers_per_block,),

@@ -1,3 +1,5 @@
+import time
+start = time.time()
 import numpy as np
 import tectosaur_fmm.fmm_wrapper as fmm
 from tectosaur.util.test_decorators import golden_master
@@ -11,7 +13,7 @@ from tectosaur.farfield import farfield_pts_direct
 # mac = 2.0
 # order = 100
 
-K = 'elasticT3'
+K = 'elasticU3'
 tensor_dim = 3
 mac = 3.0
 order = 100
@@ -93,13 +95,14 @@ def check(A, B):
     print(L2B, L2Diff, relL2)
 
 if __name__ == '__main__':
+    print(time.time() - start)
     np.random.seed(10)
     # N = 1000000
     # data = random_data(N)
     # N = 10000000
     # data = ellipsoid_pts(N)
-    N = int(3e5 ** (1.0 / 3.0))
+    N = int(1e6 ** (1.0 / 3.0))
     data = grid_data(N)
     A = fmm_runner(*data).flatten()
-    B = direct_runner(*data)
-    check(A, B)
+    # B = direct_runner(*data)
+    # check(A, B)

@@ -42,6 +42,7 @@ def template_kernels(cfg):
 def numpy_blas_cfg(cfg):
     import numpy as np
     blas = np.__config__.blas_opt_info
+
     cfg['library_dirs'] += blas['library_dirs']
     cfg['libraries'] += blas['libraries']
 
